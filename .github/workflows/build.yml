@@ -34,8 +34,13 @@ jobs:
       - name: Install npm dependencies
         run: npm install
 
-      - name: Build Tauri App (.exe)
-        run: npx @tauri-apps/cli build
+      - name: Build Frontend
+        run: npm run build
+
+      - name: Build Tauri App
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Executable Artifact
         uses: actions/upload-artifact@v4

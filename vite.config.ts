@@ -28,8 +28,8 @@ export default defineConfig({
     // Optimized chunk splitting
     rollupOptions: {
       input: {
-        main: resolve(__dirname, 'index.html'),
-        'customer-display': resolve(__dirname, 'customer-display.html'),
+        main: resolve(import.meta.dirname, 'index.html'),
+        'customer-display': resolve(import.meta.dirname, 'customer-display.html'),
       },
     },
     // Keep build size small

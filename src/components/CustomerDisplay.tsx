@@ -40,7 +40,8 @@ export function CustomerDisplay() {
       try {
         const moduleName = '@tauri-apps/api/event'
         const { listen } = await import(/* @vite-ignore */ moduleName)
-        const unlistenFn = await listen<string>('cart-update', (event) => {
+        const listenFn = listen as (event: string, handler: (e: { payload: string }) => void) => Promise<() => void>
+        const unlistenFn = await listenFn('cart-update', (event: { payload: string }) => {
           try {
             const data = JSON.parse(event.payload)
             setCart(data)

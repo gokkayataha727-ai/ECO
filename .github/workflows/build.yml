@@ -46,7 +46,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ github.ref_name }}
+          tagName: v__VERSION__
           releaseName: 'Eco Coffee POS v__VERSION__'
           releaseBody: |
             ## Eco Coffee POS Güncellemesi
@@ -54,10 +54,10 @@ jobs:
             Bu sürümdeki değişiklikler için commit geçmişini inceleyiniz.
             
             ### Kurulum
-            1. `Eco.Coffee.POS_x.x.x_x64-setup.exe` dosyasını indirin
+            1. `Eco.Coffee.POS_1.0.0_x64-setup.exe` dosyasını indirin
             2. Çift tıklayarak kurun
             3. Kurulum tamamlandığında uygulama otomatik başlayacaktır
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
 
       - name: Report build size

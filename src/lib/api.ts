@@ -22,7 +22,7 @@ function isTauri(): boolean {
 async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   const moduleName = '@tauri-apps/api/core'
   const { invoke } = await import(/* @vite-ignore */ moduleName)
-  return invoke<T>(cmd, args)
+  return (invoke as (command: string, payload?: any) => Promise<T>)(cmd, args)
 }
 
 const API_BASE = 'http://localhost:8000/api'

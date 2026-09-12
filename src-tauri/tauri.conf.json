@@ -37,7 +37,9 @@
       "icons/icon.ico"
     ],
     "windows": {
-      "webviewInstallMode": "offlineInstaller"
+      "webviewInstallMode": {
+        "type": "offlineInstaller"
+      }
     },
     "resources": []
   },

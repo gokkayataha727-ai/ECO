@@ -1,0 +1,11 @@
+import { formatCurrency, getEffectivePrice, paymentMethodLabel } from '../lib/format'
+import type { CartItem, OrderTotals, PaymentMethod } from '../types'
+import { AppLogo } from './AppLogo'
+
+interface ReceiptPreviewProps { cart: CartItem[]; customerName?: string; discountRate: number; note: string; orderNumber: string; paymentMethod: PaymentMethod; totals: OrderTotals }
+
+export function ReceiptPreview({ cart, customerName, discountRate, note, orderNumber, paymentMethod, totals }: ReceiptPreviewProps) {
+  const date = new Intl.DateTimeFormat('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date())
+  return <div className="receipt-wrap"><div className="receipt"><div className="flex justify-center mb-4"><AppLogo className="w-16 h-16 object-contain" alt="Eco Coffee Logo" /></div><div className="receipt-brand">ECO COFFEE</div><div className="receipt-meta">Gaziantep · Nurdağı<br />{date}<br />Sipariş #{orderNumber}</div>{customerName && <div className="receipt-customer">Müşteri: {customerName}</div>}<div className="receipt-dash" />{cart.map((item) => <div key={item.cartItemId}><div className="receipt-line"><span>{item.quantity} × {item.name}</span><span>{formatCurrency(getEffectivePrice(item) * item.quantity)}</span></div>{item.selectedOptions && item.selectedOptions.length > 0 && <span className="receipt-item-options">{item.selectedOptions.map(o => o.priceDelta !== 0 ? `${o.optionName} (${o.priceDelta > 0 ? '+' : ''}${o.priceDelta}₺)` : o.optionName).join(', ')}</span>}</div>)}<div className="receipt-dash" /><div className="receipt-line"><span>Ara Toplam</span><span>{formatCurrency(totals.subtotal)}</span></div>{discountRate > 0 && <div className="receipt-line"><span>İndirim (%{discountRate * 100})</span><span>-{formatCurrency(totals.discount)}</span></div>}<div className="receipt-line receipt-total"><span>TOPLAM</span><span>{formatCurrency(totals.total)}</span></div><div className="receipt-line"><span>Ödeme</span><span>{paymentMethodLabel(paymentMethod)}</span></div>{note && <div className="receipt-note">Not: {note}</div>}<div className="receipt-thanks">Bizi tercih ettiğiniz için teşekkürler!</div></div></div>
+}
+

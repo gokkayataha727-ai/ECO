@@ -1,4 +1,5 @@
 use tauri::State;
+use tauri::Emitter;
 use std::sync::Mutex;
 use crate::db::{
     Database, Product, SaveProductInput, CreateOrderInput,

@@ -2,7 +2,7 @@ use rusqlite::{Connection, Result, params};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use uuid::Uuid;
-use chrono::{Utc, Duration, NaiveDateTime};
+use chrono::{Utc, Duration};
 
 // ──────────────────────────────────────────────
 // Data Models

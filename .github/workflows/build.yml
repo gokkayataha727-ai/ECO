@@ -34,48 +34,25 @@ jobs:
       - name: Install npm dependencies
         run: npm install
 
-      - name: Copy existing database (migration)
-        run: |
-          if (Test-Path "backend/eco_coffee.db") {
-            Copy-Item "backend/eco_coffee.db" "src-tauri/"
-          }
-        shell: pwsh
+      - name: Build Tauri App (.exe)
+        run: npm run tauri:build
 
-      - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
+      - name: Upload Executable Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ECO-Coffee-POS-Windows-Installer
+          path: src-tauri/target/release/bundle/nsis/*.exe
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: src-tauri/target/release/bundle/nsis/*.exe
+          name: Eco Coffee POS ${{ github.ref_name }}
+          body: |
+            ## Eco Coffee POS Windows Setup (.exe)
+            
+            1. `eco-coffee-pos_${{ github.ref_name }}_x64-setup.exe` dosyasını indirin.
+            2. POS bilgisayarınızda çift tıklayarak kurun.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: v__VERSION__
-          releaseName: 'Eco Coffee POS v__VERSION__'
-          releaseBody: |
-            ## Eco Coffee POS Güncellemesi
-            
-            Bu sürümdeki değişiklikler için commit geçmişini inceleyiniz.
-            
-            ### Kurulum
-            1. `Eco.Coffee.POS_1.0.0_x64-setup.exe` dosyasını indirin
-            2. Çift tıklayarak kurun
-            3. Kurulum tamamlandığında uygulama otomatik başlayacaktır
-          releaseDraft: false
-          prerelease: false
-
-      - name: Report build size
-        run: |
-          $exeFiles = Get-ChildItem -Path "src-tauri/target/release/bundle/nsis/*.exe" -ErrorAction SilentlyContinue
-          if ($exeFiles) {
-            foreach ($file in $exeFiles) {
-              $sizeMB = [math]::Round($file.Length / 1MB, 2)
-              Write-Host "📦 Installer: $($file.Name) — $sizeMB MB"
-            }
-          } else {
-            Write-Host "⚠️ No .exe found in bundle output"
-          }
-          
-          # Also check the unpacked app size
-          $appDir = "src-tauri/target/release"
-          if (Test-Path "$appDir/eco-coffee-pos.exe") {
-            $appSize = [math]::Round((Get-Item "$appDir/eco-coffee-pos.exe").Length / 1MB, 2)
-            Write-Host "🖥️ App binary: $appSize MB"
-          }
-        shell: pwsh

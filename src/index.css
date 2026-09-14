@@ -183,7 +183,6 @@ button:disabled {
 }
 
 .catalog {
-  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -308,7 +307,7 @@ button:disabled {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  min-height: 135px;
   height: auto;
   overflow: hidden;
   padding: 13px;
@@ -394,7 +393,7 @@ textarea:focus-visible {
 }
 
 .product-card-body {
-  flex: 0 0 auto;
+  flex: 1;
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
@@ -480,8 +479,6 @@ textarea:focus-visible {
 }
 
 .cart-panel {
-  height: 100%;
-  max-height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2290,7 +2287,6 @@ textarea:focus-visible {
 .table-order-view {
   width: min(1480px, 100%);
   max-width: 100%;
-  height: 100%;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -2480,7 +2476,7 @@ textarea:focus-visible {
   }
 
   .product-card {
-    min-height: 0;
+    min-height: 120px;
   }
 
   .cart-panel {
@@ -3675,7 +3671,6 @@ body.kiosk-mode {
 /* Ensure touch targets are at least 48x48px for reliable touch input */
 body.kiosk-mode button,
 body.kiosk-mode .category-button,
-body.kiosk-mode .product-card,
 body.kiosk-mode .quantity-button,
 body.kiosk-mode .trash-button,
 body.kiosk-mode .header-icon {

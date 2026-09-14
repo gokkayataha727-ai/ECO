@@ -779,18 +779,19 @@ textarea:focus-visible {
 
 .overlay {
   position: fixed;
-  z-index: 30;
+  z-index: 50;
   inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 18px;
-  background: rgba(42, 29, 22, .32);
-  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  background: rgba(30, 20, 15, 0.45);
 }
 
 .modal {
-  width: min(585px, 100%);
-  max-height: calc(100svh - 36px);
+  width: min(585px, 95vw);
+  max-height: calc(100vh - 48px);
+  margin: auto;
   overflow: auto;
   border: 1px solid rgba(255, 255, 255, .55);
   border-radius: 25px;

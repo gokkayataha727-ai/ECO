@@ -124,8 +124,8 @@ export function ReportsModal({ isOpen, onClose, completedOrders = [], onClearRep
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6" role="dialog">
-      <div className="bg-[#f8f9fa] w-full max-w-7xl h-[95vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-white/20">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-2 sm:p-4 my-auto" role="dialog">
+      <div className="bg-[#f8f9fa] w-full max-w-7xl max-h-[88vh] h-full my-auto rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-white/20">
         
         {/* Header */}
         <div className="bg-white px-8 py-5 flex items-center justify-between border-b border-gray-100 shrink-0">

@@ -183,6 +183,7 @@ button:disabled {
 }
 
 .catalog {
+  height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -299,7 +300,6 @@ button:disabled {
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 4px;
-  align-items: start;
   align-content: start;
 }
 
@@ -479,6 +479,8 @@ textarea:focus-visible {
 }
 
 .cart-panel {
+  height: 100%;
+  max-height: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -533,6 +535,7 @@ textarea:focus-visible {
   min-height: 0;
   overflow-y: auto;
   padding: 10px 17px;
+  scrollbar-gutter: stable;
 }
 
 .cart-row {
@@ -653,6 +656,7 @@ textarea:focus-visible {
   flex-shrink: 0;
   overflow-y: auto;
   max-height: 50%;
+  scrollbar-gutter: stable;
 }
 
 .discount-toggle {
@@ -718,6 +722,7 @@ textarea:focus-visible {
 
 .customer-name-input {
   flex: 1;
+  min-width: 0;
   min-height: 38px;
   border: 0;
   outline: none;
@@ -2287,6 +2292,7 @@ textarea:focus-visible {
 .table-order-view {
   width: min(1480px, 100%);
   max-width: 100%;
+  height: 100%;
   margin: 0 auto;
   display: flex;
   flex-direction: column;

@@ -100,9 +100,9 @@ export const CartItemRow = memo(function CartItemRow({ item, onUpdateQuantity, o
         onTouchEnd={handlePointerUp}
       >
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <p className="cart-item-name">{item.name}</p>
-            {item.badge && <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-sm">{item.badge}</span>}
+          <div className="flex items-center gap-2 min-w-0">
+            <p className="cart-item-name flex-1 min-w-0" title={item.name}>{item.name}</p>
+            {item.badge && <span className="flex-shrink-0 text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-sm">{item.badge}</span>}
           </div>
           
           {item.selectedOptions && item.selectedOptions.length > 0 && (

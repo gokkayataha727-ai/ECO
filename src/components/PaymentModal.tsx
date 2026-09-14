@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { formatCurrency, paymentMethodLabel } from '../lib/format'
 import type { CartItem, OrderTotals, PaymentMethod } from '../types'
 import { ReceiptPreview } from './ReceiptPreview'
+import { useVirtualKeyboard } from '../context/VirtualKeyboardContext'
 
 interface PaymentModalProps {
   cart: CartItem[]
@@ -19,6 +20,7 @@ interface PaymentModalProps {
 }
 
 export function PaymentModal({ cart, customerName, discountRate, isOpen, note, onClose, onNewOrder, onPaid, orderNumber, paidMethod, totals }: PaymentModalProps) {
+  const { openKeyboard } = useVirtualKeyboard()
   const [method, setMethod] = useState<PaymentMethod>('card')
   const [cashReceived, setCashReceived] = useState('')
   const [processing, setProcessing] = useState(false)
@@ -79,7 +81,30 @@ export function PaymentModal({ cart, customerName, discountRate, isOpen, note, o
               <button type="button" className={`method-card ${method === 'qr' ? 'selected' : ''}`} onClick={() => setMethod('qr')} role="radio" aria-checked={method === 'qr'}><QrCode size={25} /><span>QR ile Öde</span></button>
             </div>
             {method === 'card' && <div className="terminal-card"><span className="pulse-dot" /><div><strong className="block text-[12px]">Kart terminali hazır</strong><span>Temassız veya çipli kartınızı okutun.</span></div></div>}
-            {method === 'cash' && <div className="cash-area"><label className="text-[11px] font-bold text-stone-500" htmlFor="cash-received">Müşterinin verdiği tutar</label><input id="cash-received" className="cash-input" inputMode="decimal" value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} placeholder={formatCurrency(totals.total)} /><div className="quick-amounts">{[200, 300, 500].map((value) => <button type="button" key={value} onClick={() => setCashReceived(String(value))}>{formatCurrency(value)}</button>)}<button type="button" onClick={() => setCashReceived(String(totals.total))}>Tam Tutar</button></div><div className="change-line"><span>Para Üstü</span><strong>{formatCurrency(change)}</strong></div></div>}
+            {method === 'cash' && (
+              <div className="cash-area">
+                <label className="text-[11px] font-bold text-stone-500" htmlFor="cash-received">Müşterinin verdiği tutar</label>
+                <input
+                  id="cash-received"
+                  className="cash-input"
+                  inputMode="decimal"
+                  value={cashReceived}
+                  onChange={(event) => setCashReceived(event.target.value)}
+                  onClick={() => openKeyboard({
+                    value: cashReceived,
+                    onChange: setCashReceived,
+                    mode: 'number',
+                    title: 'Verilen Nakit Tutarı (₺)',
+                  })}
+                  placeholder={formatCurrency(totals.total)}
+                />
+                <div className="quick-amounts">
+                  {[200, 300, 500].map((value) => <button type="button" key={value} onClick={() => setCashReceived(String(value))}>{formatCurrency(value)}</button>)}
+                  <button type="button" onClick={() => setCashReceived(String(totals.total))}>Tam Tutar</button>
+                </div>
+                <div className="change-line"><span>Para Üstü</span><strong>{formatCurrency(change)}</strong></div>
+              </div>
+            )}
             {method === 'qr' && <><div className="qr-placeholder" aria-label="Ödeme QR kodu"><QrCode size={50} /></div><p className="muted text-center">Müşterinin kamerayla taraması için QR Kod</p></>}
             <button type="button" className="confirm-pay" onClick={handleConfirm} disabled={!canConfirm}>{method === 'card' ? <CreditCard size={18} /> : method === 'cash' ? <Banknote size={18} /> : <CheckCircle2 size={18} />} Ödemeyi Onayla</button>
           </div>

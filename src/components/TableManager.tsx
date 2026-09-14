@@ -1,6 +1,7 @@
 import { Edit3, Plus, Save, Search, Trash2, X, LayoutGrid } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import type { Table } from '../types'
+import { useVirtualKeyboard } from '../context/VirtualKeyboardContext'
 
 interface TableManagerProps {
   isOpen: boolean
@@ -14,6 +15,7 @@ type Draft = { name: string }
 const blankDraft: Draft = { name: '' }
 
 export function TableManager({ isOpen, onClose, tables, onSave, onDelete }: TableManagerProps) {
+  const { openKeyboard } = useVirtualKeyboard()
   const [draft, setDraft] = useState<Draft>(blankDraft)
   const [query, setQuery] = useState('')
   const [editingId, setEditingId] = useState<string | undefined>()
@@ -60,7 +62,18 @@ export function TableManager({ isOpen, onClose, tables, onSave, onDelete }: Tabl
             <div className="manager-list-head">
               <div className="manager-search">
                 <Search size={15} />
-                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Masa ara..." aria-label="Masa ara" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onClick={() => openKeyboard({
+                    value: query,
+                    onChange: setQuery,
+                    mode: 'text',
+                    title: 'Masa Arama',
+                  })}
+                  placeholder="Masa ara..."
+                  aria-label="Masa ara"
+                />
               </div>
               <button type="button" className="new-product-button" onClick={startNew}>
                 <Plus size={15} /> Yeni masa
@@ -106,7 +119,17 @@ export function TableManager({ isOpen, onClose, tables, onSave, onDelete }: Tabl
             </div>
             <label>
               Masa adı
-              <input value={draft.name} onChange={(e) => setDraft({ name: e.target.value })} placeholder="Örn. Masa 15, Bahçe 4 vb." />
+              <input
+                value={draft.name}
+                onChange={(e) => setDraft({ name: e.target.value })}
+                onClick={() => openKeyboard({
+                  value: draft.name,
+                  onChange: (val) => setDraft({ name: val }),
+                  mode: 'text',
+                  title: 'Masa Adı Girin',
+                })}
+                placeholder="Örn. Masa 15, Bahçe 4 vb."
+              />
             </label>
             <button type="button" className="save-product-button" disabled={!draft.name.trim()} onClick={save}>
               <Save size={17} /> {editingId ? 'Değişiklikleri kaydet' : 'Masayı ekle'}

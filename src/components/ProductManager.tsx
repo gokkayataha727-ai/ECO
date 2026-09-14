@@ -2,6 +2,7 @@ import { ArrowDown, ArrowUp, ChevronDown, Edit3, PackagePlus, Plus, Save, Search
 import { useMemo, useState, useEffect } from 'react'
 import { categories } from '../data/products'
 import type { OptionGroup, OptionItem, Product, ProductCategory } from '../types'
+import { useVirtualKeyboard } from '../context/VirtualKeyboardContext'
 
 interface ProductManagerProps { isOpen: boolean; onClose: () => void; products: Product[]; onSave: (product: Product, imageFile?: File | null) => void; onDelete: (id: string) => void; initialEditId?: string | null }
 type Draft = Omit<Product, 'id'> & { id?: string }
@@ -23,6 +24,7 @@ function createBlankOption(): OptionItem {
 }
 
 export function ProductManager({ isOpen, onClose, products, onSave, onDelete, initialEditId }: ProductManagerProps) {
+  const { openKeyboard } = useVirtualKeyboard()
   const [draft, setDraft] = useState<Draft>(blankDraft)
   const [imageFile, setImageFile] = useState<File | null>(null)
   const [query, setQuery] = useState('')
@@ -169,7 +171,16 @@ export function ProductManager({ isOpen, onClose, products, onSave, onDelete, in
           {/* Product List */}
           <div className="manager-list">
             <div className="manager-list-head">
-              <div className="manager-search"><Search size={15} /><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Ürün ara..." aria-label="Menüde ürün ara" /></div>
+              <div className="manager-search">
+                <Search size={15} />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  onClick={() => openKeyboard({ value: query, onChange: setQuery, mode: 'text', title: 'Ürün Arama' })}
+                  placeholder="Ürün ara..."
+                  aria-label="Menüde ürün ara"
+                />
+              </div>
               <button type="button" className="new-product-button" onClick={startNew}><Plus size={15} /> Yeni ürün</button>
             </div>
             <div className="manager-count">{visibleProducts.length} ürün listeleniyor</div>
@@ -214,10 +225,51 @@ export function ProductManager({ isOpen, onClose, products, onSave, onDelete, in
               {editingId && <button type="button" className="text-button" onClick={startNew}>Yeniye geç</button>}
             </div>
 
-            <label>Ürün adı<input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="Örn. Vanilyalı Latte" /></label>
-            <label>Açıklama<input value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} placeholder="Örn. 350 ml · özel şurup" /></label>
+            <label>
+              Ürün adı
+              <input
+                value={draft.name}
+                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                onClick={() => openKeyboard({
+                  value: draft.name,
+                  onChange: (val) => setDraft((d) => ({ ...d, name: val })),
+                  mode: 'text',
+                  title: 'Ürün Adı Girin',
+                })}
+                placeholder="Örn. Vanilyalı Latte"
+              />
+            </label>
+            <label>
+              Açıklama
+              <input
+                value={draft.description}
+                onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+                onClick={() => openKeyboard({
+                  value: draft.description,
+                  onChange: (val) => setDraft((d) => ({ ...d, description: val })),
+                  mode: 'text',
+                  title: 'Açıklama Girin',
+                })}
+                placeholder="Örn. 350 ml · özel şurup"
+              />
+            </label>
             <div className="form-row">
-              <label>Fiyat (₺)<input type="number" min="1" step="0.5" value={draft.price || ''} onChange={(e) => setDraft({ ...draft, price: Number(e.target.value) })} /></label>
+              <label>
+                Fiyat (₺)
+                <input
+                  type="number"
+                  min="1"
+                  step="0.5"
+                  value={draft.price || ''}
+                  onChange={(e) => setDraft({ ...draft, price: Number(e.target.value) })}
+                  onClick={() => openKeyboard({
+                    value: draft.price ? String(draft.price) : '',
+                    onChange: (val) => setDraft((d) => ({ ...d, price: Number(val) || 0 })),
+                    mode: 'number',
+                    title: 'Ürün Fiyatı (₺)',
+                  })}
+                />
+              </label>
               <label>Kategori<select value={draft.category} onChange={(e) => setDraft({ ...draft, category: e.target.value as ProductCategory })}>{categoryOptions.map((option) => <option key={option}>{option}</option>)}</select></label>
             </div>
             <label>Rozet <select value={draft.badge ?? ''} onChange={(e) => setDraft({ ...draft, badge: (e.target.value || undefined) as Product['badge'] })}><option value="">Rozet yok</option><option value="Yeni">Yeni</option><option value="Çok Satan">Çok Satan</option></select></label>
@@ -260,6 +312,12 @@ export function ProductManager({ isOpen, onClose, products, onSave, onDelete, in
                         }}
                         value={group.name}
                         onChange={(e) => updateGroup(group.id, { name: e.target.value })}
+                        onClick={() => openKeyboard({
+                          value: group.name,
+                          onChange: (val) => updateGroup(group.id, { name: val }),
+                          mode: 'text',
+                          title: 'Grup Adı Girin',
+                        })}
                         placeholder="Grup adı (örn. Boyut, Ekstra Özellikler)"
                       />
                       <div className="option-group-controls">
@@ -335,6 +393,12 @@ export function ProductManager({ isOpen, onClose, products, onSave, onDelete, in
                           }}
                           value={opt.name}
                           onChange={(e) => updateOption(group.id, opt.id, { name: e.target.value })}
+                          onClick={() => openKeyboard({
+                            value: opt.name,
+                            onChange: (val) => updateOption(group.id, opt.id, { name: val }),
+                            mode: 'text',
+                            title: 'Seçenek Adı Girin',
+                          })}
                           placeholder="Seçenek adı (örn: Küçük, Ekstra Shot)"
                         />
                         <input
@@ -358,6 +422,12 @@ export function ProductManager({ isOpen, onClose, products, onSave, onDelete, in
                           step="0.5"
                           value={opt.priceDelta || ''}
                           onChange={(e) => updateOption(group.id, opt.id, { priceDelta: Number(e.target.value) || 0 })}
+                          onClick={() => openKeyboard({
+                            value: opt.priceDelta ? String(opt.priceDelta) : '',
+                            onChange: (val) => updateOption(group.id, opt.id, { priceDelta: Number(val) || 0 }),
+                            mode: 'number',
+                            title: 'Fiyat Farkı (₺)',
+                          })}
                           placeholder="+ Fiyat (₺)"
                           title="Fiyat Farkı"
                         />

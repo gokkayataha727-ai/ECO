@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { VirtualKeyboardProvider } from './context/VirtualKeyboardContext'
+import { GlobalVirtualKeyboard } from './components/GlobalVirtualKeyboard'
 import { AdisyonModal } from './components/AdisyonModal'
 import { ReportsModal } from './components/ReportsModal'
 import { KeyboardHelpModal } from './components/KeyboardHelpModal'
@@ -397,226 +399,229 @@ function App() {
   }
 
   return (
-    <main className="app-shell">
-      <TopBar
-        view={view}
-        onViewChange={(v) => {
-          setView(v)
-          if (v === 'tables') setActiveTableId(null)
-          if (v === 'home') setActiveTableId(null)
-        }}
-        onOpenSummary={() => setIsSummaryOpen(true)}
-        onOpenHelp={() => setIsHelpOpen(true)}
-        onOpenProducts={() => setIsProductsOpen(true)}
-        onOpenLogoSettings={() => setIsLogoSettingsOpen(true)}
-        onOpenSettings={() => setIsSettingsOpen(true)}
-        settings={settings}
-      />
-
-      {view === 'home' ? (
-        <HomePage
-          completedOrders={completedOrders}
-          tables={tables}
-          onViewChange={setView}
+    <VirtualKeyboardProvider>
+      <main className="app-shell">
+        <TopBar
+          view={view}
+          onViewChange={(v) => {
+            setView(v)
+            if (v === 'tables') setActiveTableId(null)
+            if (v === 'home') setActiveTableId(null)
+          }}
           onOpenSummary={() => setIsSummaryOpen(true)}
+          onOpenHelp={() => setIsHelpOpen(true)}
           onOpenProducts={() => setIsProductsOpen(true)}
+          onOpenLogoSettings={() => setIsLogoSettingsOpen(true)}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          settings={settings}
         />
-      ) : view === 'tables' ? (
-        activeTableId && activeTable ? (
-          <TableOrderView
-            tableName={activeTable.name}
-            cart={cart}
-            confirmClear={confirmClear}
-            note={note}
-            customerName={customerName}
-            totals={totals}
-            products={menuProducts}
-            onAddProduct={addProduct}
-            onUpdateQuantity={updateQuantity}
-            onRemoveItem={removeItem}
-            onApplyItemDiscount={applyItemDiscount}
-            onClear={clearCart}
-            onConfirmClearChange={setConfirmClear}
-            onNoteChange={setNote}
-            onCustomerNameChange={setCustomerName}
-            onCompleteOrder={handleCompleteOrder}
-            onOpenPayment={handleOpenPayment}
-            onOpenAdisyon={handleOpenAdisyon}
-            onOpenProducts={handleOpenProducts}
-            onBack={handleBackToTables}
-            onEditProduct={handleEditProduct}
-            onViewDetail={handleViewDetail}
-            onDeleteProduct={handleDeleteProduct}
-          />
-        ) : (
-          <TableLayout
+
+        {view === 'home' ? (
+          <HomePage
+            completedOrders={completedOrders}
             tables={tables}
-            onSelectTable={(id) => {
-              setActiveTableId(id)
-            }}
-            onOpenTableManager={() => setIsTableManagerOpen(true)}
-            onCloseTable={handleCloseTable}
-            onCancelOrder={handleCancelOrderForTable}
-            onCompleteOrder={handleCompleteOrderForTable}
-            onViewAdisyon={handleViewAdisyonForTable}
+            onViewChange={setView}
+            onOpenSummary={() => setIsSummaryOpen(true)}
+            onOpenProducts={() => setIsProductsOpen(true)}
           />
-        )
-      ) : (
-        <section className="kasa-catalog-layout" aria-label="Eco Coffee ürün kataloğu">
-          <ProductExplorer
-            category={kasaCategory}
-            onCategoryChange={setKasaCategory}
-            search={kasaSearch}
-            onSearchChange={setKasaSearch}
-            searchRef={kasaSearchRef}
-            products={menuProducts}
-            onOpenProducts={handleOpenProducts}
-            onEditProduct={handleEditProduct}
-            onViewDetail={handleViewDetail}
-            onDeleteProduct={handleDeleteProduct}
-            readOnly
-          />
-        </section>
-      )}
+        ) : view === 'tables' ? (
+          activeTableId && activeTable ? (
+            <TableOrderView
+              tableName={activeTable.name}
+              cart={cart}
+              confirmClear={confirmClear}
+              note={note}
+              customerName={customerName}
+              totals={totals}
+              products={menuProducts}
+              onAddProduct={addProduct}
+              onUpdateQuantity={updateQuantity}
+              onRemoveItem={removeItem}
+              onApplyItemDiscount={applyItemDiscount}
+              onClear={clearCart}
+              onConfirmClearChange={setConfirmClear}
+              onNoteChange={setNote}
+              onCustomerNameChange={setCustomerName}
+              onCompleteOrder={handleCompleteOrder}
+              onOpenPayment={handleOpenPayment}
+              onOpenAdisyon={handleOpenAdisyon}
+              onOpenProducts={handleOpenProducts}
+              onBack={handleBackToTables}
+              onEditProduct={handleEditProduct}
+              onViewDetail={handleViewDetail}
+              onDeleteProduct={handleDeleteProduct}
+            />
+          ) : (
+            <TableLayout
+              tables={tables}
+              onSelectTable={(id) => {
+                setActiveTableId(id)
+              }}
+              onOpenTableManager={() => setIsTableManagerOpen(true)}
+              onCloseTable={handleCloseTable}
+              onCancelOrder={handleCancelOrderForTable}
+              onCompleteOrder={handleCompleteOrderForTable}
+              onViewAdisyon={handleViewAdisyonForTable}
+            />
+          )
+        ) : (
+          <section className="kasa-catalog-layout" aria-label="Eco Coffee ürün kataloğu">
+            <ProductExplorer
+              category={kasaCategory}
+              onCategoryChange={setKasaCategory}
+              search={kasaSearch}
+              onSearchChange={setKasaSearch}
+              searchRef={kasaSearchRef}
+              products={menuProducts}
+              onOpenProducts={handleOpenProducts}
+              onEditProduct={handleEditProduct}
+              onViewDetail={handleViewDetail}
+              onDeleteProduct={handleDeleteProduct}
+              readOnly
+            />
+          </section>
+        )}
 
-      <PaymentModal
-        cart={cart}
-        discountRate={discountRate}
-        isOpen={isPaymentOpen}
-        note={note}
-        customerName={customerName}
-        onClose={() => setIsPaymentOpen(false)}
-        onNewOrder={() => {
-          if (paidMethod) {
-            const newOrder: CompletedOrder = {
-              id: crypto.randomUUID(),
-              orderNumber: orderNumber,
-              items: [...cart],
-              totals: { ...totals },
-              paymentMethod: paidMethod,
-              date: new Date().toISOString(),
-              note: note,
-              customerName: customerName || undefined,
-              cashier: 'Kasiyer'
-            }
-            setCompletedOrders(prev => [newOrder, ...prev])
-          }
-          clearCart()
-          setPaidMethod(null)
-          setIsPaymentOpen(false)
-        }}
-        onPaid={finishPayment}
-        orderNumber={orderNumber}
-        paidMethod={paidMethod}
-        totals={totals}
-      />
-
-      <ReportsModal
-        isOpen={isSummaryOpen}
-        onClose={() => setIsSummaryOpen(false)}
-        completedOrders={completedOrders}
-        onClearReports={handleClearReports}
-      />
-      <KeyboardHelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
-      <AdisyonModal cart={cart} discountRate={discountRate} isOpen={isAdisyonOpen} note={note} customerName={customerName} onClose={() => setIsAdisyonOpen(false)} orderNumber={orderNumber} totals={totals} />
-      <ProductManager
-        isOpen={isProductsOpen}
-        initialEditId={editProductId}
-        onClose={() => {
-          setIsProductsOpen(false)
-          setEditProductId(null)
-        }}
-        products={menuProducts}
-        onSave={(product, imageFile) => {
-          let localImageUrl = product.image_url
-          if (imageFile) {
-            localImageUrl = URL.createObjectURL(imageFile)
-          }
-
-          const productToSave: Product = {
-            ...product,
-            image_url: localImageUrl,
-          }
-
-          // 1. Immediately update local state & localStorage so user sees product instantly
-          setMenuProducts((current) => {
-            const existingIndex = current.findIndex((item) => item.id === productToSave.id || item.name === productToSave.name)
-            if (existingIndex >= 0) {
-              const copy = [...current]
-              copy[existingIndex] = productToSave
-              return copy
-            }
-            return [...current, productToSave]
-          })
-
-          // 2. Async backend sync via API layer (fetch to FastAPI)
-          apiSaveProduct(product, imageFile)
-            .then(savedProduct => {
-              if (savedProduct && savedProduct.id) {
-                setMenuProducts((current) => current.map((item) => {
-                  if (item.id === productToSave.id || item.name === productToSave.name) {
-                    return {
-                      ...item,
-                      id: savedProduct.id,
-                      image_url: savedProduct.image_url || item.image_url
-                    }
-                  }
-                  return item
-                }))
+        <PaymentModal
+          cart={cart}
+          discountRate={discountRate}
+          isOpen={isPaymentOpen}
+          note={note}
+          customerName={customerName}
+          onClose={() => setIsPaymentOpen(false)}
+          onNewOrder={() => {
+            if (paidMethod) {
+              const newOrder: CompletedOrder = {
+                id: crypto.randomUUID(),
+                orderNumber: orderNumber,
+                items: [...cart],
+                totals: { ...totals },
+                paymentMethod: paidMethod,
+                date: new Date().toISOString(),
+                note: note,
+                customerName: customerName || undefined,
+                cashier: 'Kasiyer'
               }
-            })
-            .catch(err => console.warn("Backend save skipped or failed, product kept in local store:", err))
-        }}
-        onDelete={handleDeleteProduct}
-      />
-      <ProductDetailModal
-        product={detailProduct}
-        isOpen={!!detailProduct}
-        onClose={() => setDetailProduct(null)}
-        onEditProduct={handleEditProduct}
-        onAddProduct={view === 'tables' && activeTableId ? addProduct : undefined}
-      />
-      {optionModalProduct && (
-        <ProductOptionModal
-          product={optionModalProduct}
-          isOpen={true}
-          onClose={() => setOptionModalProduct(null)}
-          onConfirm={handleConfirmOption}
+              setCompletedOrders(prev => [newOrder, ...prev])
+            }
+            clearCart()
+            setPaidMethod(null)
+            setIsPaymentOpen(false)
+          }}
+          onPaid={finishPayment}
+          orderNumber={orderNumber}
+          paidMethod={paidMethod}
+          totals={totals}
         />
-      )}
-      <TableManager
-        isOpen={isTableManagerOpen}
-        onClose={() => setIsTableManagerOpen(false)}
-        tables={tables}
-        onSave={(table) => setTables((current) => {
-          const existing = current.some((t) => t.id === table.id)
-          return existing 
-            ? current.map((t) => t.id === table.id ? { ...t, name: table.name } : t)
-            : [...current, { ...table, status: 'empty', cart: [], discountRate: 0, note: '' }]
-        })}
-        onDelete={(id) => {
-          setTables((current) => current.filter((t) => t.id !== id))
-          if (activeTableId === id) {
-            setActiveTableId(null)
-            setView('tables')
-          }
-        }}
-      />
-      <LogoSettingsModal
-        isOpen={isLogoSettingsOpen}
-        onClose={() => setIsLogoSettingsOpen(false)}
-      />
-      <SettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        settings={settings}
-        onUpdateSettings={setSettings}
-        onOpenProducts={() => setIsProductsOpen(true)}
-        onOpenTableManager={() => setIsTableManagerOpen(true)}
-        onOpenLogoSettings={() => setIsLogoSettingsOpen(true)}
-        onResetData={handleResetData}
-      />
-    </main>
+
+        <ReportsModal
+          isOpen={isSummaryOpen}
+          onClose={() => setIsSummaryOpen(false)}
+          completedOrders={completedOrders}
+          onClearReports={handleClearReports}
+        />
+        <KeyboardHelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
+        <AdisyonModal cart={cart} discountRate={discountRate} isOpen={isAdisyonOpen} note={note} customerName={customerName} onClose={() => setIsAdisyonOpen(false)} orderNumber={orderNumber} totals={totals} />
+        <ProductManager
+          isOpen={isProductsOpen}
+          initialEditId={editProductId}
+          onClose={() => {
+            setIsProductsOpen(false)
+            setEditProductId(null)
+          }}
+          products={menuProducts}
+          onSave={(product, imageFile) => {
+            let localImageUrl = product.image_url
+            if (imageFile) {
+              localImageUrl = URL.createObjectURL(imageFile)
+            }
+
+            const productToSave: Product = {
+              ...product,
+              image_url: localImageUrl,
+            }
+
+            // 1. Immediately update local state & localStorage so user sees product instantly
+            setMenuProducts((current) => {
+              const existingIndex = current.findIndex((item) => item.id === productToSave.id || item.name === productToSave.name)
+              if (existingIndex >= 0) {
+                const copy = [...current]
+                copy[existingIndex] = productToSave
+                return copy
+              }
+              return [...current, productToSave]
+            })
+
+            // 2. Async backend sync via API layer (fetch to FastAPI)
+            apiSaveProduct(product, imageFile)
+              .then(savedProduct => {
+                if (savedProduct && savedProduct.id) {
+                  setMenuProducts((current) => current.map((item) => {
+                    if (item.id === productToSave.id || item.name === productToSave.name) {
+                      return {
+                        ...item,
+                        id: savedProduct.id,
+                        image_url: savedProduct.image_url || item.image_url
+                      }
+                    }
+                    return item
+                  }))
+                }
+              })
+              .catch(err => console.warn("Backend save skipped or failed, product kept in local store:", err))
+          }}
+          onDelete={handleDeleteProduct}
+        />
+        <ProductDetailModal
+          product={detailProduct}
+          isOpen={!!detailProduct}
+          onClose={() => setDetailProduct(null)}
+          onEditProduct={handleEditProduct}
+          onAddProduct={view === 'tables' && activeTableId ? addProduct : undefined}
+        />
+        {optionModalProduct && (
+          <ProductOptionModal
+            product={optionModalProduct}
+            isOpen={true}
+            onClose={() => setOptionModalProduct(null)}
+            onConfirm={handleConfirmOption}
+          />
+        )}
+        <TableManager
+          isOpen={isTableManagerOpen}
+          onClose={() => setIsTableManagerOpen(false)}
+          tables={tables}
+          onSave={(table) => setTables((current) => {
+            const existing = current.some((t) => t.id === table.id)
+            return existing 
+              ? current.map((t) => t.id === table.id ? { ...t, name: table.name } : t)
+              : [...current, { ...table, status: 'empty', cart: [], discountRate: 0, note: '' }]
+          })}
+          onDelete={(id) => {
+            setTables((current) => current.filter((t) => t.id !== id))
+            if (activeTableId === id) {
+              setActiveTableId(null)
+              setView('tables')
+            }
+          }}
+        />
+        <LogoSettingsModal
+          isOpen={isLogoSettingsOpen}
+          onClose={() => setIsLogoSettingsOpen(false)}
+        />
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          settings={settings}
+          onUpdateSettings={setSettings}
+          onOpenProducts={() => setIsProductsOpen(true)}
+          onOpenTableManager={() => setIsTableManagerOpen(true)}
+          onOpenLogoSettings={() => setIsLogoSettingsOpen(true)}
+          onResetData={handleResetData}
+        />
+        <GlobalVirtualKeyboard />
+      </main>
+    </VirtualKeyboardProvider>
   )
 }
 

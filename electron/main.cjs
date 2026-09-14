@@ -57,7 +57,7 @@ function createMainWindow() {
     title: 'ECO COFFEE - Kasa & Restoran Otomasyonu',
     icon: iconPath,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       webSecurity: !isDev,
@@ -105,7 +105,7 @@ function openCustomerDisplay() {
     title: 'ECO COFFEE - Müşteri Ekranı',
     icon: iconPath,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
     },

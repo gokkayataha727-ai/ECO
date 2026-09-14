@@ -292,7 +292,7 @@ button:disabled {
 
 .product-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
   gap: 12px;
   margin-top: 14px;
   flex: 1;
@@ -304,19 +304,22 @@ button:disabled {
 
 .product-card {
   position: relative;
-  min-height: 192px;
+  display: flex;
+  flex-direction: column;
+  min-height: 195px;
   overflow: hidden;
   padding: 13px;
-  border: 1px solid #dfd5cc;
+  border: 1px solid #e2dad0;
   border-radius: 18px;
   text-align: left;
-  background: #faf6f1;
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgba(65, 41, 27, .05);
   transition: .2s ease;
 }
 
 .product-card:hover {
-  border-color: #d9cfc5;
-  box-shadow: 0 11px 19px rgba(65, 41, 27, .08);
+  border-color: #c9bdb3;
+  box-shadow: 0 10px 22px rgba(65, 41, 27, .12);
   transform: translateY(-2px);
 }
 
@@ -328,12 +331,20 @@ textarea:focus-visible {
   outline-offset: 2px;
 }
 
+.product-card-top {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
 .product-visual {
   display: grid;
-  width: 55px;
-  height: 55px;
+  width: 52px;
+  height: 52px;
   place-items: center;
-  border-radius: 16px;
+  border-radius: 15px;
+  flex-shrink: 0;
 }
 
 .product-visual.hot {
@@ -363,16 +374,15 @@ textarea:focus-visible {
 
 .product-badge {
   position: absolute;
-  top: 12px;
-  left: 12px;
-  right: auto;
+  top: 2px;
+  right: 28px;
   width: max-content;
-  max-width: calc(100% - 56px);
-  padding: 4px 8px;
+  max-width: calc(100% - 85px);
+  padding: 3px 8px;
   border-radius: 7px;
   color: #81552d;
   background: #fbebd5;
-  font-size: 9px;
+  font-size: 9.5px;
   font-weight: 850;
   letter-spacing: .03em;
   white-space: nowrap;
@@ -380,31 +390,55 @@ textarea:focus-visible {
   pointer-events: none;
 }
 
+.product-card-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  margin: 6px 0;
+}
+
 .product-name {
-  margin: 14px 0 4px;
-  color: #5c493d;
-  font-size: 14px;
+  margin: 2px 0 2px;
+  color: #2c2018;
+  font-size: 13.5px;
   line-height: 1.25;
   font-weight: 800;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .product-meta {
   display: block;
-  color: #9b8a7f;
+  color: #8c7a6e;
   font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+  padding-top: 4px;
 }
 
 .product-price {
-  margin-top: 12px;
-  color: #3b291f;
-  font-size: 14px;
+  margin-top: 0;
+  color: #2c2018;
+  font-size: 14.5px;
   font-weight: 850;
 }
 
 .add-button {
-  position: absolute;
-  right: 11px;
-  bottom: 11px;
+  position: relative;
+  right: 0;
+  bottom: 0;
   display: grid;
   width: 34px;
   height: 34px;
@@ -415,6 +449,7 @@ textarea:focus-visible {
   background: #8a6d57;
   box-shadow: 0 5px 12px rgba(140, 103, 81, .22);
   transition: .18s;
+  flex-shrink: 0;
 }
 
 .add-button:hover {
@@ -2327,7 +2362,7 @@ textarea:focus-visible {
 
 @media (max-width: 1180px) {
   .product-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(138px, 1fr));
   }
 
   .kasa-catalog-layout .product-grid {
@@ -2335,7 +2370,7 @@ textarea:focus-visible {
   }
 
   .pos-layout {
-    grid-template-columns: minmax(0, 1fr) 365px;
+    grid-template-columns: minmax(0, 1fr) 350px;
   }
 
   .kpi-grid {
@@ -2345,7 +2380,7 @@ textarea:focus-visible {
 
 @media (max-width: 900px) {
   .app-shell {
-    padding: 12px;
+    padding: 10px;
   }
 
   .topbar {
@@ -2353,11 +2388,13 @@ textarea:focus-visible {
   }
 
   .pos-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) 310px;
+    gap: 10px;
   }
 
   .catalog {
-    min-height: auto;
+    min-height: 0;
+    padding: 14px;
   }
 
   .cart-panel {
@@ -2365,7 +2402,8 @@ textarea:focus-visible {
   }
 
   .cart-items {
-    max-height: 290px;
+    flex: 1;
+    min-height: 0;
   }
 
   .topbar .clock-info,
@@ -2389,6 +2427,13 @@ textarea:focus-visible {
 
   .welcome-title {
     font-size: 22px;
+  }
+}
+
+@media (max-width: 540px) {
+  .pos-layout {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
   }
 }
 

@@ -97,105 +97,111 @@ const ProductCard = memo(({
       }}
       style={{ cursor: 'pointer' }}
     >
-      {/* 3-Dots Action Menu Button */}
-      <div style={{ position: 'absolute', top: '10px', right: '10px', zIndex: 10 }}>
-        <button
-          type="button"
-          className="product-options-trigger"
-          aria-label="Ürün Seçenekleri"
-          onClick={(e) => {
-            e.stopPropagation()
-            setIsMenuOpen((prev) => !prev)
-          }}
-        >
-          <MoreVertical size={16} />
-        </button>
-
-        {isMenuOpen && (
-          <div 
-            ref={menuRef} 
-            className="product-card-menu"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {onViewDetail && (
-              <button
-                type="button"
-                className="product-card-menu-item"
-                onClick={() => {
-                  setIsMenuOpen(false)
-                  onViewDetail(product)
-                }}
-              >
-                <Eye size={14} />
-                <span>Detaylar</span>
-              </button>
-            )}
-            {onEditProduct && (
-              <button
-                type="button"
-                className="product-card-menu-item"
-                onClick={() => {
-                  setIsMenuOpen(false)
-                  onEditProduct(product)
-                }}
-              >
-                <Edit3 size={14} />
-                <span>Ürünü Düzenle</span>
-              </button>
-            )}
-            {onDeleteProduct && (
-              <button
-                type="button"
-                className="product-card-menu-item danger"
-                onClick={() => {
-                  setIsMenuOpen(false)
-                  if (window.confirm(`"${product.name}" ürününü silmek istediğinize emin misiniz?`)) {
-                    onDeleteProduct(product.id)
-                  }
-                }}
-              >
-                <Trash2 size={14} />
-                <span>Ürünü Sil</span>
-              </button>
-            )}
+      <div className="product-card-top flex items-start justify-between w-full relative mb-1.5">
+        {imageUrl ? (
+          <div className="product-visual image-visual" style={{ padding: 0, overflow: 'hidden' }}>
+            <img
+              src={imageUrl}
+              alt={product.name}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              onError={(e) => {
+                e.currentTarget.style.display = 'none'
+              }}
+            />
           </div>
+        ) : (
+          <div className={`product-visual ${visual.className}`}>{visual.icon}</div>
         )}
+
+        {product.badge && <span className="product-badge">{product.badge}</span>}
+
+        <div style={{ position: 'absolute', top: '0', right: '0', zIndex: 10 }}>
+          <button
+            type="button"
+            className="product-options-trigger"
+            aria-label="Ürün Seçenekleri"
+            onClick={(e) => {
+              e.stopPropagation()
+              setIsMenuOpen((prev) => !prev)
+            }}
+          >
+            <MoreVertical size={16} />
+          </button>
+
+          {isMenuOpen && (
+            <div 
+              ref={menuRef} 
+              className="product-card-menu"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {onViewDetail && (
+                <button
+                  type="button"
+                  className="product-card-menu-item"
+                  onClick={() => {
+                    setIsMenuOpen(false)
+                    onViewDetail(product)
+                  }}
+                >
+                  <Eye size={14} />
+                  <span>Detaylar</span>
+                </button>
+              )}
+              {onEditProduct && (
+                <button
+                  type="button"
+                  className="product-card-menu-item"
+                  onClick={() => {
+                    setIsMenuOpen(false)
+                    onEditProduct(product)
+                  }}
+                >
+                  <Edit3 size={14} />
+                  <span>Ürünü Düzenle</span>
+                </button>
+              )}
+              {onDeleteProduct && (
+                <button
+                  type="button"
+                  className="product-card-menu-item danger"
+                  onClick={() => {
+                    setIsMenuOpen(false)
+                    if (window.confirm(`"${product.name}" ürününü silmek istediğinize emin misiniz?`)) {
+                      onDeleteProduct(product.id)
+                    }
+                  }}
+                >
+                  <Trash2 size={14} />
+                  <span>Ürünü Sil</span>
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
-      {imageUrl ? (
-        <div className="product-visual image-visual" style={{ padding: 0, overflow: 'hidden' }}>
-          <img
-            src={imageUrl}
-            alt={product.name}
-            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            onError={(e) => {
-              e.currentTarget.style.display = 'none'
+      <div className="product-card-body flex-1 flex flex-col justify-start my-1">
+        <h2 className="product-name">{product.name}</h2>
+        {product.description && <span className="product-meta">{product.description}</span>}
+      </div>
+
+      <div className="product-card-footer flex items-center justify-between mt-auto pt-1 w-full">
+        <div className="product-price">{formatCurrency(product.price)}</div>
+
+        {isInteractive && (
+          <button
+            type="button"
+            className="add-button"
+            aria-label={`${product.name} ekle`}
+            onClick={(event) => {
+              event.stopPropagation()
+              onAddProduct(product.id)
             }}
-          />
-        </div>
-      ) : (
-        <div className={`product-visual ${visual.className}`}>{visual.icon}</div>
-      )}
-
-      {product.badge && <span className="product-badge">{product.badge}</span>}
-
-      <h2 className="product-name">{product.name}</h2>
-      <span className="product-meta">{product.description}</span>
-      <div className="product-price">{formatCurrency(product.price)}</div>
-
-      {isInteractive && (
-        <button
-          type="button"
-          className="add-button"
-          aria-label={`${product.name} ekle`}
-          onClick={(event) => {
-            event.stopPropagation()
-            onAddProduct(product.id)
-          }}
-        >
-          <Plus size={18} strokeWidth={2.5} />
-        </button>
-      )}
+          >
+            <Plus size={18} strokeWidth={2.5} />
+          </button>
+        )}
+      </div>
     </article>
   )
 })

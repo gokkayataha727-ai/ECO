@@ -95,15 +95,14 @@ const ProductCard = memo(({
           handleCardClick()
         }
       }}
-      style={{ cursor: 'pointer' }}
     >
-      <div className="product-card-top flex items-start justify-between w-full relative mb-1.5">
+      <div className="product-card-top">
         {imageUrl ? (
-          <div className="product-visual image-visual" style={{ padding: 0, overflow: 'hidden' }}>
+          <div className="product-visual image-visual">
             <img
               src={imageUrl}
               alt={product.name}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              className="product-visual-img"
               onError={(e) => {
                 e.currentTarget.style.display = 'none'
               }}
@@ -115,7 +114,7 @@ const ProductCard = memo(({
 
         {product.badge && <span className="product-badge">{product.badge}</span>}
 
-        <div style={{ position: 'absolute', top: '0', right: '0', zIndex: 10 }}>
+        <div className="product-options-wrap">
           <button
             type="button"
             className="product-options-trigger"
@@ -180,12 +179,12 @@ const ProductCard = memo(({
         </div>
       </div>
 
-      <div className="product-card-body flex-1 flex flex-col justify-start my-1">
+      <div className="product-card-body">
         <h2 className="product-name">{product.name}</h2>
         {product.description && <span className="product-meta">{product.description}</span>}
       </div>
 
-      <div className="product-card-footer flex items-center justify-between mt-auto pt-1 w-full">
+      <div className="product-card-footer">
         <div className="product-price">{formatCurrency(product.price)}</div>
 
         {isInteractive && (
@@ -242,28 +241,28 @@ export const ProductExplorer = memo(function ProductExplorer({
 
   return (
     <section className="catalog surface">
-      <div className="catalog-header flex items-end justify-between gap-3">
+      <div className="catalog-header">
         <div>
           <p className="section-kicker">{readOnly ? 'Ürün kataloğu' : 'Hızlı satış'}</p>
           <h1 className="section-title">{readOnly ? 'Menü & Fiyat Listesi' : 'Menüden seçin'}</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="catalog-header-actions">
           <button 
             type="button"
             onClick={onOpenProducts}
-            className="hidden items-center gap-1.5 rounded-xl bg-stone-100 px-4 py-2 text-[12px] font-bold text-stone-700 md:flex border border-stone-200 hover:bg-stone-200 hover:text-stone-800 transition-colors shadow-sm"
+            className="catalog-add-product-btn"
           >
             <Plus size={15} />
             Ürün Ekle / Düzenle
           </button>
-          <div className="hidden items-center gap-1 rounded-xl bg-amber-50 px-3 py-2 text-[11px] font-bold text-amber-800 md:flex">
+          <div className="catalog-favorites-badge">
             <Sparkles size={14} /> Favorileriniz hazır
           </div>
         </div>
       </div>
 
-      <label className="search-box search-box-animated flex items-center justify-between" aria-label="Ürün ara">
-        <div className="flex items-center gap-2 flex-1">
+      <label className="search-box search-box-animated" aria-label="Ürün ara">
+        <div className="search-box-left">
           <Search size={19} aria-hidden="true" />
           <input
             ref={searchRef}
@@ -275,10 +274,10 @@ export const ProductExplorer = memo(function ProductExplorer({
             placeholder="Ürün ara..."
           />
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="search-box-right">
           <button
             type="button"
-            className="p-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 transition-colors"
+            className="keyboard-trigger-btn"
             onClick={(e) => {
               e.stopPropagation()
               e.preventDefault()
@@ -330,8 +329,8 @@ export const ProductExplorer = memo(function ProductExplorer({
         <div className="empty-results">
           <div>
             <div className="empty-icon"><Search size={28} /></div>
-            <h2 className="section-title text-[18px]">Sonuç bulunamadı</h2>
-            <p className="muted mt-2">Aramanızı veya kategori seçiminizi değiştirin.</p>
+            <h2 className="section-title empty-results-title">Sonuç bulunamadı</h2>
+            <p className="muted empty-results-subtitle">Aramanızı veya kategori seçiminizi değiştirin.</p>
           </div>
         </div>
       )}

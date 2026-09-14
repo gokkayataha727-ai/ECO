@@ -13,6 +13,10 @@ app.commandLine.appendSwitch('ignore-gpu-blocklist')
 app.commandLine.appendSwitch('enable-gpu-rasterization')
 app.commandLine.appendSwitch('enable-zero-copy')
 
+// Windows DPI awareness — force 1:1 pixel ratio to prevent element drift on POS displays
+app.commandLine.appendSwitch('high-dpi-support', '1')
+app.commandLine.appendSwitch('force-device-scale-factor', '1')
+
 /** @type {BrowserWindow | null} */
 let mainWindow = null
 
@@ -63,10 +67,17 @@ function createMainWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       webSecurity: !isDev,
+      zoomFactor: 1.0,
     },
   })
 
   loadMainContent(mainWindow)
+
+  // Lock zoom level to prevent DPI drift on Windows POS devices
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow.webContents.setZoomFactor(1.0)
+    mainWindow.webContents.setZoomLevel(0)
+  })
 
   // Open DevTools in development
   if (isDev) {

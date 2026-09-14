@@ -68,18 +68,18 @@ export const CartPanel = memo(function CartPanel({
       <div className="cart-head">
         <div>
           <p className="section-kicker">Masa Siparişi</p>
-          <h2 className="section-title text-[21px]">Aktif Sipariş</h2>
+          <h2 className="section-title cart-title">Aktif Sipariş</h2>
           <span className="order-code">#{orderNumber}</span>
         </div>
-        {!cartIsEmpty && <div className="flex items-center gap-3"><button type="button" className="adisyon-link" onClick={onOpenAdisyon}><ClipboardList size={14} /> Adisyon</button><button type="button" className="clear-button" onClick={() => onConfirmClearChange(true)}>Tümünü temizle</button></div>}
+        {!cartIsEmpty && <div className="cart-head-actions"><button type="button" className="adisyon-link" onClick={onOpenAdisyon}><ClipboardList size={14} /> Adisyon</button><button type="button" className="clear-button" onClick={() => onConfirmClearChange(true)}>Tümünü temizle</button></div>}
       </div>
 
       {cartIsEmpty ? (
         <div className="cart-empty">
           <div>
             <div className="cart-empty-illustration"><Coffee size={38} strokeWidth={1.4} /></div>
-            <h3 className="m-0 text-[17px] font-extrabold text-stone-800">Sepetiniz boş</h3>
-            <p className="muted mx-auto mt-2 max-w-[220px]">Menüden ürün seçerek siparişinizi oluşturmaya başlayın.</p>
+            <h3 className="cart-empty-title">Sepetiniz boş</h3>
+            <p className="muted cart-empty-text">Menüden ürün seçerek siparişinizi oluşturmaya başlayın.</p>
           </div>
         </div>
       ) : (
@@ -103,8 +103,8 @@ export const CartPanel = memo(function CartPanel({
             <div><button type="button" onClick={onClear}>Evet, temizle</button><button type="button" onClick={() => onConfirmClearChange(false)}>Vazgeç</button></div>
           </div>
         )}
-        <div className="customer-name-row flex items-center justify-between">
-          <div className="flex items-center gap-2 flex-1">
+        <div className="customer-name-row">
+          <div className="customer-name-row-inner">
             <User size={14} className="customer-name-icon" />
             <input
               type="text"
@@ -121,7 +121,7 @@ export const CartPanel = memo(function CartPanel({
           </div>
           <button
             type="button"
-            className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 transition-colors ml-1"
+            className="keyboard-trigger-btn cart-kb-btn"
             onClick={(e) => {
               e.stopPropagation()
               e.preventDefault()
@@ -137,9 +137,9 @@ export const CartPanel = memo(function CartPanel({
             <Keyboard size={15} />
           </button>
         </div>
-        <div className="relative mt-2">
+        <div className="note-area-wrap">
           <textarea
-            className="note-area pr-8"
+            className="note-area"
             value={note}
             onChange={(event) => onNoteChange(event.target.value)}
             onFocus={handleOpenNoteKb}
@@ -150,7 +150,7 @@ export const CartPanel = memo(function CartPanel({
           />
           <button
             type="button"
-            className="absolute top-2 right-2 p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 transition-colors"
+            className="keyboard-trigger-btn note-kb-btn"
             onClick={(e) => {
               e.stopPropagation()
               e.preventDefault()
@@ -172,9 +172,9 @@ export const CartPanel = memo(function CartPanel({
           <div className="total-row"><span>KDV dahil</span><strong>%10</strong></div>
           <div className="grand-total"><span>Genel Toplam</span><strong>{formatCurrency(totals.total)}</strong></div>
         </div>
-        <div className="flex gap-2">
-          <button type="button" className="pay-button" style={{ background: '#059669', flex: 1 }} disabled={cartIsEmpty} onClick={onCompleteOrder}>Siparişi Tamamla</button>
-          <button type="button" className="pay-button" style={{ flex: 1 }} disabled={cartIsEmpty} onClick={onOpenPayment}><CreditCard size={19} /> Ödeme <span className="shortcut ml-1 bg-white/10 text-white/75">F4</span></button>
+        <div className="cart-actions">
+          <button type="button" className="pay-button pay-button--complete" disabled={cartIsEmpty} onClick={onCompleteOrder}>Siparişi Tamamla</button>
+          <button type="button" className="pay-button pay-button--payment" disabled={cartIsEmpty} onClick={onOpenPayment}><CreditCard size={19} /> Ödeme <span className="shortcut pay-shortcut">F4</span></button>
         </div>
       </div>
     </aside>

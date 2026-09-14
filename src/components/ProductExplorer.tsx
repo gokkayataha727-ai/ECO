@@ -1,7 +1,8 @@
-import { CakeSlice, Coffee, Croissant, CupSoda, Edit3, Eye, Leaf, MoreVertical, Plus, Search, Sparkles, Trash2 } from 'lucide-react'
+import { CakeSlice, Coffee, Croissant, CupSoda, Edit3, Eye, Keyboard as KeyboardIcon, Leaf, MoreVertical, Plus, Search, Sparkles, Trash2 } from 'lucide-react'
 import { memo, useMemo, useState, useEffect, useRef } from 'react'
 import { categories } from '../data/products'
 import { formatCurrency } from '../lib/format'
+import { VirtualKeyboard } from './VirtualKeyboard'
 import type { Product, ProductCategory } from '../types'
 
 interface ProductExplorerProps {
@@ -213,6 +214,8 @@ export const ProductExplorer = memo(function ProductExplorer({
   onViewDetail,
   onDeleteProduct,
 }: ProductExplorerProps) {
+  const [isKbOpen, setIsKbOpen] = useState(false)
+
   const filteredProducts = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase('tr-TR')
     return products.filter((product) => {
@@ -244,11 +247,35 @@ export const ProductExplorer = memo(function ProductExplorer({
         </div>
       </div>
 
-      <label className="search-box search-box-animated" aria-label="Ürün ara">
-        <Search size={19} aria-hidden="true" />
-        <input ref={searchRef} value={search} onChange={(event) => onSearchChange(event.target.value)} placeholder="Ürün ara..." />
-        <span className="shortcut">F2</span>
+      <label className="search-box search-box-animated flex items-center justify-between" aria-label="Ürün ara">
+        <div className="flex items-center gap-2 flex-1">
+          <Search size={19} aria-hidden="true" />
+          <input ref={searchRef} value={search} onChange={(event) => onSearchChange(event.target.value)} onClick={() => setIsKbOpen(true)} placeholder="Ürün ara..." />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            className="p-1 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 transition-colors"
+            onClick={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              setIsKbOpen(true)
+            }}
+            title="Sanal Klavye Aç"
+          >
+            <KeyboardIcon size={16} />
+          </button>
+          <span className="shortcut">F2</span>
+        </div>
       </label>
+
+      <VirtualKeyboard
+        isOpen={isKbOpen}
+        onClose={() => setIsKbOpen(false)}
+        title="Ürün Ara"
+        value={search}
+        onChange={onSearchChange}
+      />
 
       <div className="category-tabs category-tabs-animated" role="tablist" aria-label="Ürün kategorileri">
         {categories.map((item) => (

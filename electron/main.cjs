@@ -8,8 +8,10 @@ if (!gotTheLock) {
   process.exit(0)
 }
 
-// Disable hardware acceleration issues on some POS terminals
-app.disableHardwareAcceleration()
+// Enable GPU hardware acceleration for smooth rendering on Windows POS hardware
+app.commandLine.appendSwitch('ignore-gpu-blocklist')
+app.commandLine.appendSwitch('enable-gpu-rasterization')
+app.commandLine.appendSwitch('enable-zero-copy')
 
 /** @type {BrowserWindow | null} */
 let mainWindow = null
@@ -151,6 +153,16 @@ ipcMain.handle('minimize-app', () => {
 ipcMain.handle('toggle-fullscreen', () => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.setFullScreen(!mainWindow.isFullScreen())
+  }
+})
+
+ipcMain.handle('open-windows-keyboard', () => {
+  if (process.platform === 'win32') {
+    const { exec } = require('child_process')
+    const tabTipPath = 'C:\\Program Files\\Common Files\\microsoft shared\\ink\\TabTip.exe'
+    exec(`start "" "${tabTipPath}" || osk`, (err) => {
+      if (err) console.warn('Could not launch Windows virtual keyboard:', err)
+    })
   }
 })
 

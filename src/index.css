@@ -16,10 +16,14 @@
   box-sizing: border-box;
 }
 
+html,
 body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+  overflow-y: auto;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
 }
 
 button,
@@ -39,6 +43,9 @@ button:disabled {
 .app-shell {
   min-height: 100vh;
   padding: 20px;
+  overflow-y: auto;
+  touch-action: pan-y;
+  transform: translateZ(0);
   background:
     radial-gradient(circle at 8% 5%, rgba(230, 216, 203, .55), transparent 26rem),
     radial-gradient(circle at 88% 0%, rgba(244, 220, 184, .38), transparent 23rem),
@@ -52,9 +59,10 @@ button:disabled {
   padding: 12px 14px 12px 18px;
   border: 1px solid rgba(93, 72, 56, .1);
   border-radius: 22px;
-  background: rgba(255, 254, 251, .86);
+  background: rgba(255, 254, 251, .92);
   box-shadow: 0 12px 36px rgba(65, 41, 27, .08);
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(6px);
+  transform: translateZ(0);
 }
 
 .brand-mark {
@@ -3536,22 +3544,39 @@ body.warm {
   color: #fca5a5;
 }
 
-/* ──────────────────────────────────────────────
-   KIOSK / POS MODE — Touch & Fullscreen
+/* ═════════════════════════════════════════════════════════════════
+   KIOSK / POS MODE — Touch & Fullscreen & Scrolling
    ────────────────────────────────────────────── */
 
-/* Hide cursor in kiosk mode (Electron fullscreen POS) */
-body.kiosk-mode,
-body.kiosk-mode * {
-  cursor: none !important;
-}
-
-/* Prevent text selection on POS touch screens */
+/* Allow default cursor in kiosk mode (do not force hidden cursor so mouse works) */
 body.kiosk-mode {
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
-  overflow: hidden;
+  overflow-y: auto !important;
+  overflow-x: hidden;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Scrollbar styling for POS touchscreen and Windows */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(244, 235, 227, 0.5);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(138, 109, 87, 0.4);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(138, 109, 87, 0.7);
 }
 
 /* Ensure touch targets are at least 48x48px for reliable touch input */
@@ -3565,12 +3590,17 @@ body.kiosk-mode .header-icon {
   min-height: 48px;
 }
 
-/* Smooth touch scrolling */
+/* Smooth touch scrolling & Touch Action Pan Y */
 body.kiosk-mode .cart-items,
 body.kiosk-mode .product-grid,
-body.kiosk-mode .category-tabs {
+body.kiosk-mode .category-tabs,
+body.kiosk-mode .catalog,
+body.kiosk-mode .kasa-catalog-layout,
+body.kiosk-mode .table-order-view,
+body.kiosk-mode .home-container {
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
+  touch-action: pan-y;
 }
 
 /* Remove hover effects on touch (prevents sticky hover) */
@@ -3629,6 +3659,8 @@ body.kiosk-mode .category-tabs {
 /* Fullscreen app shell adjustments */
 body.kiosk-mode .app-shell {
   padding: 12px;
-  height: 100vh;
-  overflow: hidden;
+  min-height: 100vh;
+  height: auto;
+  overflow-y: auto;
+  touch-action: pan-y;
 }

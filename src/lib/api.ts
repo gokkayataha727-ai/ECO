@@ -130,6 +130,12 @@ export async function toggleFullscreen(): Promise<void> {
   }
 }
 
+export async function openWindowsKeyboard(): Promise<void> {
+  if (isElectron() && (window as any).electronAPI.openWindowsKeyboard) {
+    await (window as any).electronAPI.openWindowsKeyboard()
+  }
+}
+
 // ──────────────────────────────────────────────
 // Helpers
 // ──────────────────────────────────────────────

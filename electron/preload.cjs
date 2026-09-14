@@ -46,6 +46,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   toggleFullscreen: () => ipcRenderer.invoke('toggle-fullscreen'),
 
   /**
+   * Open Windows touch keyboard (TabTip.exe / OSK)
+   */
+  openWindowsKeyboard: () => ipcRenderer.invoke('open-windows-keyboard'),
+
+  /**
    * Flag indicating we're in Electron environment
    */
   isElectron: true,

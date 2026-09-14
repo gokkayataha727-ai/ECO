@@ -164,7 +164,7 @@ button:disabled {
 
 .pos-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 390px);
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
   gap: 14px;
   width: min(1480px, 100%);
   max-width: 100%;
@@ -785,11 +785,11 @@ textarea:focus-visible {
 }
 
 .cart-bottom {
-  padding: 14px 22px 22px;
+  padding: 14px 20px 20px;
   border-top: 1px solid #dfd5cc;
   flex-shrink: 0;
   overflow-y: auto;
-  max-height: 50%;
+  /* max-height:50% removed — was cutting off totals+buttons on small screens */
   scrollbar-gutter: stable;
 }
 
@@ -815,7 +815,7 @@ textarea:focus-visible {
 
 .note-area {
   width: 100%;
-  min-height: 47px;
+  min-height: 52px;
   margin-top: 10px;
   padding: 10px;
   padding-right: 36px;
@@ -825,7 +825,8 @@ textarea:focus-visible {
   outline: none;
   color: #5d4a3e;
   background: #fcfaf7;
-  font-size: 12px;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .note-area:focus {
@@ -876,12 +877,12 @@ textarea:focus-visible {
 .customer-name-input {
   flex: 1;
   min-width: 0;
-  min-height: 38px;
+  min-height: 44px;
   border: 0;
   outline: none;
   color: #5d4a3e;
   background: transparent;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .customer-name-input::placeholder {
@@ -898,15 +899,16 @@ textarea:focus-visible {
 
 .totals {
   display: grid;
-  gap: 9px;
-  margin: 17px 0;
+  gap: 10px;
+  margin: 14px 0;
 }
 
 .total-row {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   color: #6d5a4e;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .total-row.discount {
@@ -923,12 +925,12 @@ textarea:focus-visible {
 }
 
 .grand-total span {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 800;
 }
 
 .grand-total strong {
-  font-size: 23px;
+  font-size: 24px;
   letter-spacing: -.04em;
 }
 
@@ -938,15 +940,16 @@ textarea:focus-visible {
   justify-content: center;
   gap: 9px;
   width: 100%;
-  min-height: 54px;
+  min-height: 58px;
   border: 0;
   border-radius: 14px;
   color: #fffdf9;
   background: #8a6d57;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 800;
   box-shadow: 0 10px 17px rgba(52, 35, 27, .17);
   transition: .18s;
+  letter-spacing: .01em;
 }
 
 .pay-button:hover:not(:disabled) {
@@ -2589,7 +2592,7 @@ textarea:focus-visible {
   }
 
   .pos-layout {
-    grid-template-columns: minmax(0, 1fr) 350px;
+    grid-template-columns: minmax(0, 1fr) 370px;
   }
 
   .kpi-grid {
@@ -2607,7 +2610,7 @@ textarea:focus-visible {
   }
 
   .pos-layout {
-    grid-template-columns: minmax(0, 1fr) 310px;
+    grid-template-columns: minmax(0, 1fr) 330px;
     gap: 10px;
   }
 
@@ -3965,4 +3968,70 @@ body.kiosk-mode .app-shell {
   height: auto;
   overflow-y: auto;
   touch-action: pan-y;
+}
+
+/* ═══════════════════════════════════════
+   KIOSK MODE — CART PANEL (AVAPOS 15.6" touch)
+   ═══════════════════════════════════════ */
+
+body.kiosk-mode .pos-layout {
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
+}
+
+/* Cart panel must always be fully visible */
+body.kiosk-mode .cart-panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 320px;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* Cart bottom must show all content without clipping */
+body.kiosk-mode .cart-bottom {
+  flex-shrink: 0;
+  max-height: none;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+/* Larger touch targets for cart inputs */
+body.kiosk-mode .customer-name-input {
+  min-height: 48px;
+  font-size: 14px;
+}
+
+body.kiosk-mode .note-area {
+  min-height: 56px;
+  font-size: 14px;
+}
+
+/* Larger pay buttons for touch */
+body.kiosk-mode .pay-button {
+  min-height: 64px;
+  font-size: 16px;
+  border-radius: 16px;
+}
+
+/* Larger cart action items */
+body.kiosk-mode .quantity-button,
+body.kiosk-mode .trash-button {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+/* Grand total bigger on touch screen */
+body.kiosk-mode .grand-total strong {
+  font-size: 26px;
+}
+
+body.kiosk-mode .totals {
+  margin: 12px 0;
+  gap: 11px;
+}
+
+body.kiosk-mode .total-row {
+  font-size: 14px;
 }

@@ -2,17 +2,29 @@
 
 Modern, hızlı ve dokunmatik ekran dostu cafe/restoran kasa arayüzü ve masa yönetim sistemi.
 
-## Çalıştırma
+## Çalıştırma (Tarayıcı)
 
 ```bash
 npm install
 npm run dev
 ```
 
-Üretim derlemesi yapmak için:
+## Electron ile Çalıştırma (Masaüstü Uygulaması)
+
 ```bash
-npm run build
+npm install
+npm run electron:dev
 ```
+
+## Üretim Derlemesi (Windows Installer)
+
+```bash
+npm run electron:build
+```
+
+Bu komut `release/` klasörüne NSIS installer (.exe) dosyası üretir.
+
+> **Not:** Electron kendi Chromium tarayıcısını içerir. Hedef bilgisayarda WebView2 veya başka bir runtime kurulumu gerekmez.
 
 ## Sistem Özellikleri
 
@@ -20,34 +32,26 @@ npm run build
 - **Ürün & Menü Yönetimi:** Ürün ekleme, fiyat güncelleme, kategori ve rozet yönetimi, varyasyon/boyut seçenekleri.
 - **Kasa & Ödeme:** Nakit, Kart ve QR ile hızlı ödeme tahsilatı, indirim ve parçalı ödeme yönetimi.
 - **Raporlama:** Günlük, haftalık ve aylık ciro, en çok satan ürünler ve ödeme tipi dağılımı analizleri.
+- **Müşteri Ekranı:** İkinci monitörde müşteri sepetini gösteren ayrı pencere (Electron).
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+## Teknolojiler
 
-Currently, two official plugins are available:
+| Katman | Teknoloji |
+|--------|-----------|
+| Frontend | React 19 + TypeScript + Vite |
+| Masaüstü | Electron |
+| Backend | FastAPI (Python) |
+| Paketleme | electron-builder (NSIS) |
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Proje Yapısı
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
 ```
-
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+├── electron/          # Electron ana süreç dosyaları
+│   ├── main.js        # Ana pencere ve IPC yönetimi
+│   └── preload.js     # Güvenli IPC bridge
+├── src/               # React frontend kaynak kodu
+├── backend/           # FastAPI backend
+├── build/icons/       # Uygulama ikonları
+├── dist/              # Vite build çıktısı
+└── release/           # Electron-builder çıktısı (.exe)
+```

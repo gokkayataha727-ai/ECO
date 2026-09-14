@@ -1,7 +1,7 @@
-import { BarChart3, CircleHelp, MapPin, Settings, Image as ImageIcon, Monitor } from 'lucide-react'
+import { BarChart3, CircleHelp, MapPin, Settings, Image as ImageIcon, Monitor, Power, Minus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { AppLogo } from './AppLogo'
-import { openCustomerDisplay, isTauriEnvironment } from '../lib/api'
+import { openCustomerDisplay, isElectronEnvironment, quitApp, minimizeApp } from '../lib/api'
 import type { AppSettings } from '../types'
 
 interface TopBarProps {
@@ -115,8 +115,12 @@ export function TopBar({
         <button type="button" className="header-icon" onClick={onOpenSummary} aria-label="Gün özetini aç"><BarChart3 size={18} /></button>
         <button type="button" className="header-icon hidden sm:grid" onClick={onOpenHelp} aria-label="Klavye kısayollarını göster"><CircleHelp size={18} /></button>
         <button type="button" className="header-icon hidden md:grid" onClick={onOpenLogoSettings} title="Logo Ayarları"><ImageIcon size={18} /></button>
-        {isTauriEnvironment() && (
-          <button type="button" className="header-icon hidden md:grid" onClick={() => openCustomerDisplay()} title="Müşteri Ekranı" aria-label="Müşteri ekranını aç"><Monitor size={18} /></button>
+        {isElectronEnvironment() && (
+          <>
+            <button type="button" className="header-icon hidden md:grid" onClick={() => openCustomerDisplay()} title="Müşteri Ekranı" aria-label="Müşteri ekranını aç"><Monitor size={18} /></button>
+            <button type="button" className="header-icon hidden md:grid hover:bg-amber-500/10 hover:text-amber-600" onClick={() => minimizeApp()} title="Küçült" aria-label="Simge durumuna küçült"><Minus size={18} /></button>
+            <button type="button" className="header-icon hidden md:grid hover:bg-rose-500/10 hover:text-rose-600" onClick={() => quitApp()} title="Uygulamadan Çık" aria-label="Uygulamadan çık"><Power size={18} /></button>
+          </>
         )}
         <button type="button" className="header-icon hidden md:grid" onClick={onOpenSettings} title="Sistem Ayarları" aria-label="Sistem ayarlarını aç"><Settings size={18} /></button>
       </div>

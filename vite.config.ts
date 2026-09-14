@@ -6,7 +6,9 @@ import { resolve } from 'path'
 export default defineConfig({
   plugins: [react()],
 
-  // Allow Tauri dev server to be accessed
+  // Use relative paths so Electron can load files via file:// protocol
+  base: './',
+
   server: {
     host: '0.0.0.0',
     port: 5173,
@@ -16,15 +18,12 @@ export default defineConfig({
   // Clear the console on dev start
   clearScreen: false,
 
-  // Env variables prefixed with TAURI_ will be exposed
-  envPrefix: ['VITE_', 'TAURI_'],
-
   // Multi-page build for customer display window
   build: {
-    // Tauri targets ES2021
-    target: process.env.TAURI_ENV_PLATFORM === 'windows' ? 'chrome105' : 'safari14',
-    // Don't produce source maps for production (smaller build)
-    sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    // Electron ships its own Chromium
+    target: 'chrome120',
+    // Don't produce source maps for production
+    sourcemap: false,
     // Optimized chunk splitting
     rollupOptions: {
       input: {

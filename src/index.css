@@ -1321,6 +1321,9 @@ textarea:focus-visible {
 }
 
 .manager-list {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
   padding: 18px 21px 22px;
   border-right: 1px solid #dfd5cc;
 }
@@ -1379,7 +1382,8 @@ textarea:focus-visible {
 }
 
 .manager-products {
-  max-height: 390px;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   padding-right: 4px;
 }
@@ -3536,7 +3540,7 @@ body.warm {
    KIOSK / POS MODE — Touch & Fullscreen
    ────────────────────────────────────────────── */
 
-/* Hide cursor in kiosk mode (Tauri fullscreen POS) */
+/* Hide cursor in kiosk mode (Electron fullscreen POS) */
 body.kiosk-mode,
 body.kiosk-mode * {
   cursor: none !important;

@@ -3,7 +3,6 @@ import {
   X,
   Palette,
   Store,
-  Printer,
   Sliders,
   Check,
   Sun,
@@ -28,7 +27,7 @@ interface SettingsModalProps {
   onResetData: () => void
 }
 
-type TabType = 'appearance' | 'store' | 'receipt' | 'system'
+type TabType = 'appearance' | 'store' | 'system'
 
 export function SettingsModal({
   isOpen,
@@ -109,19 +108,6 @@ export function SettingsModal({
           >
             <Store size={16} />
             İşletme Bilgileri
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('receipt')}
-            className={`flex items-center gap-2 py-3 px-4 text-xs font-bold border-b-2 rounded-t-lg transition-all whitespace-nowrap ${
-              activeTab === 'receipt'
-                ? 'border-amber-700 text-amber-900 bg-amber-50/70 dark:bg-amber-950/30 dark:text-amber-300 dark:border-amber-400'
-                : 'border-transparent text-stone-600 hover:text-stone-900 hover:bg-stone-200/50 dark:text-stone-400 dark:hover:text-stone-200'
-            }`}
-          >
-            <Printer size={16} />
-            Adisyon & Fiş
           </button>
 
           <button
@@ -312,72 +298,7 @@ export function SettingsModal({
             </div>
           )}
 
-          {/* ── TAB 3: Adisyon & Fiş ── */}
-          {activeTab === 'receipt' && (
-            <div className="space-y-5">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-xs font-bold text-stone-800 dark:text-stone-200 mb-1.5">
-                    Para Birimi Simgesi
-                  </label>
-                  <select
-                    value={formData.currencySymbol}
-                    onChange={(e) => handleChange('currencySymbol', e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
-                  >
-                    <option value="₺">₺ (Türk Lirası - TRY)</option>
-                    <option value="$">$ (Amerikan Doları - USD)</option>
-                    <option value="€">€ (Euro - EUR)</option>
-                    <option value="£">£ (İngiliz Sterlini - GBP)</option>
-                  </select>
-                </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-stone-800 dark:text-stone-200 mb-1.5">
-                    Dahil KDV Oranı (%)
-                  </label>
-                  <input
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={formData.taxRate}
-                    onChange={(e) => handleChange('taxRate', Number(e.target.value) || 0)}
-                    className="w-full px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-stone-800 dark:text-stone-200 mb-1.5">
-                  Adisyon Alt Teşekkür Mesajı
-                </label>
-                <textarea
-                  rows={3}
-                  value={formData.receiptFooter}
-                  onChange={(e) => handleChange('receiptFooter', e.target.value)}
-                  className="w-full px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
-                  placeholder="Adisyonda en altta görünecek mesaj..."
-                />
-              </div>
-
-              <div className="flex items-center justify-between p-4 rounded-xl bg-stone-100/90 dark:bg-stone-800/80 border border-stone-200 dark:border-stone-700">
-                <div>
-                  <div className="text-xs font-bold text-stone-900 dark:text-stone-100">
-                    Ödeme Sonrası Otomatik Fiş Yazdır
-                  </div>
-                  <div className="text-[11px] text-stone-600 dark:text-stone-400 mt-0.5">
-                    Ödeme tamamlandığında adisyon penceresini otomatik tetikle
-                  </div>
-                </div>
-                <input
-                  type="checkbox"
-                  checked={formData.autoPrintReceipt}
-                  onChange={(e) => handleChange('autoPrintReceipt', e.target.checked)}
-                  className="w-4 h-4 text-amber-600 rounded focus:ring-amber-500 cursor-pointer"
-                />
-              </div>
-            </div>
-          )}
 
           {/* ── TAB 4: Hızlı Yönetim & Sistem ── */}
           {activeTab === 'system' && (

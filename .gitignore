@@ -23,8 +23,13 @@ dist-ssr
 *.sln
 *.sw?
 
-# Backend / Tauri builds
+# Backend
 backend/venv
 backend/__pycache__
-src-tauri/target
 
+# Electron
+release/
+dist_electron/
+*.exe
+*.dmg
+*.AppImage

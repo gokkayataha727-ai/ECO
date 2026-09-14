@@ -3,8 +3,8 @@ import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
 
-// Detect Tauri environment and activate kiosk mode
-if ((window as any).__TAURI_INTERNALS__) {
+// Detect Electron environment and activate kiosk mode
+if ((window as any).electronAPI) {
   document.body.classList.add('kiosk-mode')
   
   // Prevent right-click context menu in kiosk/POS mode
@@ -29,4 +29,3 @@ createRoot(document.getElementById('root')!).render(
     <App />
   </StrictMode>,
 )
-

@@ -10,7 +10,7 @@ import { SettingsModal } from './components/SettingsModal'
 import { SplashScreen } from './components/SplashScreen'
 import { products as initialProducts } from './data/products'
 import { calculateTotals } from './lib/format'
-import { getProducts, saveProduct as apiSaveProduct, deleteProductApi, updateCustomerDisplay, isTauriEnvironment } from './lib/api'
+import { getProducts, saveProduct as apiSaveProduct, deleteProductApi, updateCustomerDisplay, isElectronEnvironment } from './lib/api'
 import type { CartItem, PaymentMethod, Product, Table, CompletedOrder, SelectedOption, AppSettings } from './types'
 import { ProductManager } from './components/ProductManager'
 import { ProductOptionModal } from './components/ProductOptionModal'
@@ -72,7 +72,7 @@ function App() {
   const [activeTableId, setActiveTableId] = useState<string | null>(null)
 
   const [completedOrders, setCompletedOrders] = useState<CompletedOrder[]>(() => {
-    const saved = localStorage.getItem('completedOrders') || localStorage.getItem('demoCompletedOrders')
+    const saved = localStorage.getItem('completedOrders')
     return saved ? JSON.parse(saved) : []
   })
 
@@ -171,9 +171,9 @@ function App() {
 
   const totals = useMemo(() => calculateTotals(cart, discountRate), [cart, discountRate])
 
-  // Sync cart with customer display window (Tauri only)
+  // Sync cart with customer display window (Electron only)
   useEffect(() => {
-    if (isTauriEnvironment()) {
+    if (isElectronEnvironment()) {
       const displayData = {
         items: cart.map(item => ({
           name: item.name,
@@ -313,6 +313,42 @@ function App() {
     setActiveTableId(null)
   }, [])
 
+  const handleCloseTable = useCallback((tableId: string) => {
+    setTables((current) =>
+      current.map((t) =>
+        t.id === tableId
+          ? { ...t, cart: [], discountRate: 0, note: '', customerName: '', status: 'empty' }
+          : t
+      )
+    )
+  }, [])
+
+  const handleCancelOrderForTable = useCallback((tableId: string) => {
+    setTables((current) =>
+      current.map((t) =>
+        t.id === tableId
+          ? { ...t, cart: [], discountRate: 0, note: '', customerName: '', status: 'empty' }
+          : t
+      )
+    )
+  }, [])
+
+  const handleCompleteOrderForTable = useCallback((tableId: string) => {
+    setActiveTableId(tableId)
+    setIsPaymentOpen(true)
+  }, [])
+
+  const handleViewAdisyonForTable = useCallback((tableId: string) => {
+    setActiveTableId(tableId)
+    setIsAdisyonOpen(true)
+  }, [])
+
+  const handleClearReports = useCallback(() => {
+    setCompletedOrders([])
+    localStorage.removeItem('completedOrders')
+    localStorage.removeItem('demoCompletedOrders')
+  }, [])
+
   const finishPayment = (method: PaymentMethod) => {
     setPaidMethod(method)
   }
@@ -419,6 +455,10 @@ function App() {
               setActiveTableId(id)
             }}
             onOpenTableManager={() => setIsTableManagerOpen(true)}
+            onCloseTable={handleCloseTable}
+            onCancelOrder={handleCancelOrderForTable}
+            onCompleteOrder={handleCompleteOrderForTable}
+            onViewAdisyon={handleViewAdisyonForTable}
           />
         )
       ) : (
@@ -471,7 +511,12 @@ function App() {
         totals={totals}
       />
 
-      <ReportsModal isOpen={isSummaryOpen} onClose={() => setIsSummaryOpen(false)} completedOrders={completedOrders} />
+      <ReportsModal
+        isOpen={isSummaryOpen}
+        onClose={() => setIsSummaryOpen(false)}
+        completedOrders={completedOrders}
+        onClearReports={handleClearReports}
+      />
       <KeyboardHelpModal isOpen={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
       <AdisyonModal cart={cart} discountRate={discountRate} isOpen={isAdisyonOpen} note={note} customerName={customerName} onClose={() => setIsAdisyonOpen(false)} orderNumber={orderNumber} totals={totals} />
       <ProductManager
@@ -504,7 +549,7 @@ function App() {
             return [...current, productToSave]
           })
 
-          // 2. Async backend sync via API layer (Tauri IPC or fetch)
+          // 2. Async backend sync via API layer (fetch to FastAPI)
           apiSaveProduct(product, imageFile)
             .then(savedProduct => {
               if (savedProduct && savedProduct.id) {

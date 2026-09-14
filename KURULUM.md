@@ -1,33 +1,47 @@
 # ECO COFFEE POS — Standalone Windows (.exe) Kurulum Rehberi
 
 ## 📋 Bu Rehber Ne İçin?
-Bu rehber, Eco Coffee POS uygulamasını kafedeki AVAPOS AVA1561 bilgisayarına **tek tıkla kurulan Standalone Windows (.exe) uygulaması** olarak kurmak için hazırlanmıştır.
+Bu rehber, Eco Coffee POS uygulamasını kafedeki AVAPOS AVA1561 ve tüm Windows (10/11 64-bit) bilgisayarlara **tek tıkla kurulan Standalone Windows (.exe) uygulaması** olarak yüklemek için hazırlanmıştır.
 
-**Önemli:** Uygulama tamamen **offline** çalışır ve çalıştığı bilgisayarda **Python, Node.js veya herhangi bir ek yazılım kurulumu GEREKTİRMEZ.**
+**Önemli:** Uygulama tamamen **offline** çalışır ve çalıştığı bilgisayarda **Python, Node.js, WebView2 veya herhangi bir ek yazılım kurulumu GEREKTİRMEZ.**
 
 ---
 
-## 📦 Kurulum Adımları (POS Bilgisayarında)
+## 📦 Windows Kurulum Adımları (POS Bilgisayarında)
 
-### Adım 1: `.exe` Dosyasını İndirin
-1. GitHub Releas sayfasından (`https://github.com/gokkayataha727-ai/ECO/releases`) `eco-coffee-pos_1.0.0_x64-setup.exe` (veya `.exe` dosyasını) indirin veya USB bellek ile POS bilgisayarına kopyalayın.
+### Adım 1: `.exe` Dosyasını İndirin / Kopyalayın
+1. Projenin `release/` klasöründe veya GitHub Release sayfasında yer alan `Eco Coffee POS-Setup-1.1.0.exe` dosyasını USB bellek ile POS bilgisayarına aktarın.
 
 ### Adım 2: Kurulumu Yapın
-1. `.exe` dosyasına çift tıklayın.
-2. Kurulum sihirbazı uygulamayı `C:\Program Files\ECO COFFEE POS` klasörüne otomatik kuracak ve masaüstüne kısayol ekleyecektir.
+1. `Eco Coffee POS-Setup-1.1.0.exe` dosyasına çift tıklayın.
+2. Kurulum sihirbazı uygulamayı otomatik olarak kuracak ve masaüstü ile Başlat menüsüne simgeli kısayol ekleyecektir.
 
 ### Adım 3: Çalıştırın
-1. Masaüstündeki **ECO COFFEE POS** simgesine çift tıklayın.
-2. Uygulama bağımsız pencere ve veritabanı (Rust + SQLite) ile anında açılacaktır.
+1. Masaüstündeki **Eco Coffee POS** simgesine çift tıklayın.
+2. Uygulama tam ekran Kiosk modunda hızlıca açılacaktır.
+3. Sağ üst köşedeki **Güç (Çıkış)** butonunu kullanarak uygulamayı güvenle kapatabilir veya **Simge Durumuna Küçült** butonu ile alta alabilirsiniz.
 
 ---
 
-## 📊 Sistem Bilgileri
+## 📊 Sistem Özellikleri & Avantajları
 
-| Özellik | Değer |
-|---------|-------|
-| POS Model | AVAPOS AVA1561 (Siyah) |
-| İşletim Sistemi | Windows 10 / 11 (64-bit) |
-| Altyapı | Tauri 2.0 (Rust Backend + React Frontend) |
-| Ek Gereksinim | YOK (Python / Node gerekmez) |
-| Veritabanı | SQLite (Lokal dosya: AppData) |
+| Özellik | Açıklama / Değer |
+|---------|------------------|
+| POS Model Uyumu | AVAPOS AVA1561 ve tüm Windows 10/11 (64-bit) PC'ler |
+| Altyapı | Electron 33 + React 19 (Offline LocalStorage Engine) |
+| Çapraz Platform Yükleme | Native `loadFile` standardı ile Windows dosya yollarında %100 sorunsuz açılış |
+| Çift Çalıştırma Koruması | Single-Instance Lock ile uygulamanın birden fazla açılması engellenir |
+| Ek Gereksinim | **YOK** (Node.js, Python, WebView2 gerekmez) |
+
+---
+
+## 🛠️ Geliştiriciler İçin Windows Installer (.exe) Üretme
+
+Mac veya Windows bilgisayarınızda `.exe` kurulum dosyasını derlemek için terminalde şu komutu çalıştırmanız yeterlidir:
+
+```bash
+npm run electron:build
+```
+
+Derlenen kurulum dosyası `release/Eco Coffee POS-Setup-1.1.0.exe` olarak hazır olur.
+

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 
 /**
  * Müşteri Ekranı — İkinci monitörde gösterilir.
- * Tauri IPC üzerinden ana pencereden gelen sepet güncellemelerini dinler.
+ * Electron IPC üzerinden ana pencereden gelen sepet güncellemelerini dinler.
  */
 
 interface CartDisplayItem {
@@ -32,32 +32,29 @@ export function CustomerDisplay() {
   })
   const [currentTime, setCurrentTime] = useState(new Date())
 
-  // Listen for cart updates from main window (Tauri event)
+  // Listen for cart updates from main window (Electron IPC)
   useEffect(() => {
-    let unlisten: (() => void) | undefined
+    let cleanup: (() => void) | undefined
 
-    async function setupListener() {
-      try {
-        const moduleName = '@tauri-apps/api/event'
-        const { listen } = await import(/* @vite-ignore */ moduleName)
-        const listenFn = listen as (event: string, handler: (e: { payload: string }) => void) => Promise<() => void>
-        const unlistenFn = await listenFn('cart-update', (event: { payload: string }) => {
+    try {
+      const electronAPI = (window as any).electronAPI
+      if (electronAPI?.onCartUpdate) {
+        cleanup = electronAPI.onCartUpdate((cartJson: string) => {
           try {
-            const data = JSON.parse(event.payload)
+            const data = JSON.parse(cartJson)
             setCart(data)
           } catch (e) {
             console.error('Failed to parse cart update:', e)
           }
         })
-        unlisten = unlistenFn
-      } catch {
-        // Not in Tauri environment
-        console.log('Customer display: Not in Tauri environment, using demo mode')
+      } else {
+        console.log('Customer display: Not in Electron environment, using demo mode')
       }
+    } catch {
+      console.log('Customer display: Not in Electron environment, using demo mode')
     }
 
-    setupListener()
-    return () => { unlisten?.() }
+    return () => { cleanup?.() }
   }, [])
 
   // Clock

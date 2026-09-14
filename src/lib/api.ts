@@ -1,10 +1,11 @@
 /**
  * API Abstraction Layer
  * 
- * Tauri ortamında `invoke()`, tarayıcıda `fetch()` kullanır.
- * Bu sayede:
- *  - `npm run dev` (tarayıcı) → FastAPI backend'e fetch
- *  - `npm run tauri dev` (Tauri) → Rust backend'e IPC invoke
+ * Electron ortamında ve tarayıcıda aynı şekilde `fetch()` kullanır.
+ * FastAPI backend'e bağlanır.
+ * 
+ * Electron-only özellikler (müşteri ekranı vb.) preload script
+ * tarafından expose edilen `window.electronAPI` üzerinden erişilir.
  */
 
 import type { Product } from '../types'
@@ -13,16 +14,9 @@ import type { Product } from '../types'
 // Environment Detection
 // ──────────────────────────────────────────────
 
-/** Check if we're running inside Tauri */
-function isTauri(): boolean {
-  return !!(window as any).__TAURI_INTERNALS__
-}
-
-/** Dynamically import Tauri invoke (only available inside Tauri) */
-async function tauriInvoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
-  const moduleName = '@tauri-apps/api/core'
-  const { invoke } = await import(/* @vite-ignore */ moduleName)
-  return (invoke as (command: string, payload?: any) => Promise<T>)(cmd, args)
+/** Check if we're running inside Electron */
+function isElectron(): boolean {
+  return !!(window as any).electronAPI
 }
 
 const API_BASE = 'http://localhost:8000/api'
@@ -32,11 +26,6 @@ const API_BASE = 'http://localhost:8000/api'
 // ──────────────────────────────────────────────
 
 export async function getProducts(): Promise<Product[]> {
-  if (isTauri()) {
-    const products = await tauriInvoke<any[]>('get_products')
-    return products.map(formatProduct)
-  }
-
   const res = await fetch(`${API_BASE}/products`)
   if (!res.ok) throw new Error('Failed to fetch products')
   const data = await res.json()
@@ -50,34 +39,6 @@ export async function saveProduct(
   product: Product,
   imageFile?: File | null
 ): Promise<Product> {
-  if (isTauri()) {
-    let imageData: string | undefined
-    let imageExt: string | undefined
-
-    if (imageFile) {
-      const buffer = await imageFile.arrayBuffer()
-      const bytes = new Uint8Array(buffer)
-      imageData = uint8ArrayToBase64(bytes)
-      imageExt = imageFile.name.split('.').pop() || 'png'
-    }
-
-    const result = await tauriInvoke<any>('save_product', {
-      input: {
-        id: product.id || null,
-        name: product.name,
-        category: product.category,
-        price: product.price,
-        description: product.description || null,
-        badge: product.badge || null,
-        option_groups: product.optionGroups ? JSON.stringify(product.optionGroups) : null,
-        image_data: imageData || null,
-        image_ext: imageExt || null,
-      }
-    })
-    return formatProduct(result)
-  }
-
-  // Fallback: fetch to FastAPI
   const formData = new FormData()
   if (product.id) formData.append('id', product.id)
   formData.append('name', product.name)
@@ -94,11 +55,6 @@ export async function saveProduct(
 }
 
 export async function deleteProductApi(id: string): Promise<void> {
-  if (isTauri()) {
-    await tauriInvoke('delete_product', { productId: id })
-    return
-  }
-
   await fetch(`${API_BASE}/products/${id}`, { method: 'DELETE' })
 }
 
@@ -120,10 +76,6 @@ export interface CreateOrderInput {
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<any> {
-  if (isTauri()) {
-    return tauriInvoke('create_order', { input })
-  }
-
   const res = await fetch(`${API_BASE}/orders`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -137,14 +89,6 @@ export async function createOrder(input: CreateOrderInput): Promise<any> {
 // ──────────────────────────────────────────────
 
 export async function uploadLogo(file: File): Promise<string> {
-  if (isTauri()) {
-    const buffer = await file.arrayBuffer()
-    const bytes = new Uint8Array(buffer)
-    const data = uint8ArrayToBase64(bytes)
-    const ext = file.name.split('.').pop() || 'png'
-    return tauriInvoke<string>('upload_logo', { data, ext })
-  }
-
   const formData = new FormData()
   formData.append('file', file)
   const res = await fetch(`${API_BASE}/upload-logo`, { method: 'POST', body: formData })
@@ -153,18 +97,36 @@ export async function uploadLogo(file: File): Promise<string> {
 }
 
 // ──────────────────────────────────────────────
-// Customer Display (Tauri only)
+// Customer Display (Electron only)
 // ──────────────────────────────────────────────
 
 export async function openCustomerDisplay(): Promise<void> {
-  if (isTauri()) {
-    await tauriInvoke('open_customer_display')
+  if (isElectron()) {
+    await (window as any).electronAPI.openCustomerDisplay()
   }
 }
 
 export async function updateCustomerDisplay(cartJson: string): Promise<void> {
-  if (isTauri()) {
-    await tauriInvoke('update_customer_display', { cartJson })
+  if (isElectron()) {
+    await (window as any).electronAPI.updateCustomerDisplay(cartJson)
+  }
+}
+
+export async function quitApp(): Promise<void> {
+  if (isElectron()) {
+    await (window as any).electronAPI.quitApp()
+  }
+}
+
+export async function minimizeApp(): Promise<void> {
+  if (isElectron()) {
+    await (window as any).electronAPI.minimizeApp()
+  }
+}
+
+export async function toggleFullscreen(): Promise<void> {
+  if (isElectron()) {
+    await (window as any).electronAPI.toggleFullscreen()
   }
 }
 
@@ -190,15 +152,7 @@ function safeJsonParse(str: string): any {
   try { return JSON.parse(str) } catch { return undefined }
 }
 
-function uint8ArrayToBase64(bytes: Uint8Array): string {
-  let binary = ''
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i])
-  }
-  return btoa(binary)
-}
-
-/** Check if Tauri is available — useful in UI to show/hide Tauri-only features */
-export function isTauriEnvironment(): boolean {
-  return isTauri()
+/** Check if Electron is available — useful in UI to show/hide Electron-only features */
+export function isElectronEnvironment(): boolean {
+  return isElectron()
 }

@@ -10,10 +10,10 @@ Bu rehber, Eco Coffee POS uygulamasını kafedeki AVAPOS AVA1561 ve tüm Windows
 ## 📦 Windows Kurulum Adımları (POS Bilgisayarında)
 
 ### Adım 1: `.exe` Dosyasını İndirin / Kopyalayın
-1. Projenin `release/` klasöründe veya GitHub Release sayfasında yer alan `Eco Coffee POS-Setup-1.1.0.exe` dosyasını USB bellek ile POS bilgisayarına aktarın.
+1. Projenin `release/` klasöründe veya GitHub Release sayfasında yer alan `Eco Coffee POS-Setup-1.1.1.exe` dosyasını USB bellek ile POS bilgisayarına aktarın.
 
 ### Adım 2: Kurulumu Yapın
-1. `Eco Coffee POS-Setup-1.1.0.exe` dosyasına çift tıklayın.
+1. `Eco Coffee POS-Setup-1.1.1.exe` dosyasına çift tıklayın.
 2. Kurulum sihirbazı uygulamayı otomatik olarak kuracak ve masaüstü ile Başlat menüsüne simgeli kısayol ekleyecektir.
 
 ### Adım 3: Çalıştırın
@@ -43,5 +43,5 @@ Mac veya Windows bilgisayarınızda `.exe` kurulum dosyasını derlemek için te
 npm run electron:build
 ```
 
-Derlenen kurulum dosyası `release/Eco Coffee POS-Setup-1.1.0.exe` olarak hazır olur.
+Derlenen kurulum dosyası `release/Eco Coffee POS-Setup-1.1.1.exe` olarak hazır olur.
 

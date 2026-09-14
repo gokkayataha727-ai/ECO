@@ -1,7 +1,7 @@
 {
   "name": "eco-coffee-pos",
   "private": true,
-  "version": "1.1.0",
+  "version": "1.1.1",
   "type": "module",
   "main": "electron/main.js",
   "scripts": {
@@ -10,7 +10,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "electron:dev": "concurrently \"npm run dev\" \"wait-on http://localhost:5173 && electron .\"",
-    "electron:build": "tsc -b && vite build && electron-builder --win",
+    "electron:build": "tsc -b && vite build && electron-builder --win --publish never",
     "electron:build:dir": "tsc -b && vite build && electron-builder --win --dir"
   },
   "dependencies": {

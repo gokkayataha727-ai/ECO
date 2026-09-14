@@ -23,37 +23,44 @@ export const VirtualKeyboard = memo(function VirtualKeyboard({
   onDone,
 }: VirtualKeyboardProps) {
   const [isUppercase, setIsUppercase] = useState(true)
+  const [currentVal, setCurrentVal] = useState(value ?? '')
 
-  // Prevent scroll jump on body when keyboard opens
+  // Prevent scroll jump on body when keyboard opens and keep local value synced
   useEffect(() => {
     if (isOpen) {
+      setCurrentVal(value ?? '')
       const activeEl = document.activeElement as HTMLElement
       if (activeEl && typeof activeEl.blur === 'function') {
-        // Blur to prevent native Windows OS keyboard from overlapping or scrolling
-        // activeEl.blur()
+        activeEl.blur()
       }
     }
-  }, [isOpen])
+  }, [isOpen, value])
 
   const handleKeyPress = useCallback((char: string) => {
     const nextChar = isUppercase ? char.toLocaleUpperCase('tr-TR') : char.toLocaleLowerCase('tr-TR')
-    onChange((value ?? '') + nextChar)
-  }, [value, onChange, isUppercase])
+    const newVal = currentVal + nextChar
+    setCurrentVal(newVal)
+    onChange(newVal)
+  }, [currentVal, onChange, isUppercase])
 
   const handleBackspace = useCallback(() => {
-    const current = value ?? ''
-    if (current.length > 0) {
-      onChange(current.slice(0, -1))
+    if (currentVal.length > 0) {
+      const newVal = currentVal.slice(0, -1)
+      setCurrentVal(newVal)
+      onChange(newVal)
     }
-  }, [value, onChange])
+  }, [currentVal, onChange])
 
   const handleClear = useCallback(() => {
+    setCurrentVal('')
     onChange('')
   }, [onChange])
 
   const handleSpace = useCallback(() => {
-    onChange((value ?? '') + ' ')
-  }, [value, onChange])
+    const newVal = currentVal + ' '
+    setCurrentVal(newVal)
+    onChange(newVal)
+  }, [currentVal, onChange])
 
   const handleOpenNativeKeyboard = useCallback(() => {
     openWindowsKeyboard().catch((err) => console.warn('Native keyboard error:', err))
@@ -72,7 +79,7 @@ export const VirtualKeyboard = memo(function VirtualKeyboard({
   const row4 = ['z', 'x', 'c', 'v', 'b', 'n', 'm', 'ö', 'ç']
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-[9999] pointer-events-none flex flex-col justify-end select-none animate-fade-in p-2 sm:p-4">
+    <div className="fixed inset-x-0 bottom-0 z-[10000] pointer-events-none flex flex-col justify-end select-none animate-fade-in p-2 sm:p-4">
       <div className="w-full max-w-4xl mx-auto bg-stone-900/95 text-stone-100 rounded-2xl sm:rounded-3xl border border-amber-500/30 shadow-[0_-12px_48px_rgba(0,0,0,0.7)] p-3 sm:p-5 flex flex-col gap-2.5 transition-all duration-200 pointer-events-auto">
         
         {/* Header bar */}
@@ -113,16 +120,16 @@ export const VirtualKeyboard = memo(function VirtualKeyboard({
         {/* Display value preview */}
         <div className="bg-stone-800/90 rounded-xl px-3.5 py-2 border border-stone-700/70 flex items-center justify-between min-h-[44px]">
           <span className="font-semibold text-base text-amber-200 tracking-wide break-all flex items-center gap-1">
-            {value ? (
+            {currentVal ? (
               <>
-                {value}
+                {currentVal}
                 <span className="w-0.5 h-5 bg-amber-400 animate-pulse inline-block" />
               </>
             ) : (
               <span className="text-stone-500 italic text-sm">Yazmak için tuşlara basın...</span>
             )}
           </span>
-          {value && (
+          {currentVal && (
             <button
               type="button"
               onClick={handleClear}

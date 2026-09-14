@@ -2,7 +2,7 @@ import { CakeSlice, Coffee, Croissant, CupSoda, Edit3, Eye, Keyboard as Keyboard
 import { memo, useMemo, useState, useEffect, useRef } from 'react'
 import { categories } from '../data/products'
 import { formatCurrency } from '../lib/format'
-import { VirtualKeyboard } from './VirtualKeyboard'
+import { useVirtualKeyboard } from '../context/VirtualKeyboardContext'
 import type { Product, ProductCategory } from '../types'
 
 interface ProductExplorerProps {
@@ -214,7 +214,16 @@ export const ProductExplorer = memo(function ProductExplorer({
   onViewDetail,
   onDeleteProduct,
 }: ProductExplorerProps) {
-  const [isKbOpen, setIsKbOpen] = useState(false)
+  const { openKeyboard } = useVirtualKeyboard()
+
+  const handleOpenSearchKeyboard = () => {
+    openKeyboard({
+      value: search,
+      onChange: onSearchChange,
+      mode: 'text',
+      title: 'Ürün Ara',
+    })
+  }
 
   const filteredProducts = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase('tr-TR')
@@ -250,7 +259,15 @@ export const ProductExplorer = memo(function ProductExplorer({
       <label className="search-box search-box-animated flex items-center justify-between" aria-label="Ürün ara">
         <div className="flex items-center gap-2 flex-1">
           <Search size={19} aria-hidden="true" />
-          <input ref={searchRef} value={search} onChange={(event) => onSearchChange(event.target.value)} onClick={() => setIsKbOpen(true)} placeholder="Ürün ara..." />
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={(event) => onSearchChange(event.target.value)}
+            onFocus={handleOpenSearchKeyboard}
+            onClick={handleOpenSearchKeyboard}
+            onTouchEnd={handleOpenSearchKeyboard}
+            placeholder="Ürün ara..."
+          />
         </div>
         <div className="flex items-center gap-1.5">
           <button
@@ -259,7 +276,12 @@ export const ProductExplorer = memo(function ProductExplorer({
             onClick={(e) => {
               e.stopPropagation()
               e.preventDefault()
-              setIsKbOpen(true)
+              handleOpenSearchKeyboard()
+            }}
+            onTouchEnd={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              handleOpenSearchKeyboard()
             }}
             title="Sanal Klavye Aç"
           >
@@ -268,14 +290,6 @@ export const ProductExplorer = memo(function ProductExplorer({
           <span className="shortcut">F2</span>
         </div>
       </label>
-
-      <VirtualKeyboard
-        isOpen={isKbOpen}
-        onClose={() => setIsKbOpen(false)}
-        title="Ürün Ara"
-        value={search}
-        onChange={onSearchChange}
-      />
 
       <div className="category-tabs category-tabs-animated" role="tablist" aria-label="Ürün kategorileri">
         {categories.map((item) => (

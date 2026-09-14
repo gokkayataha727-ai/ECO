@@ -90,7 +90,19 @@ export function PaymentModal({ cart, customerName, discountRate, isOpen, note, o
                   inputMode="decimal"
                   value={cashReceived}
                   onChange={(event) => setCashReceived(event.target.value)}
+                  onFocus={() => openKeyboard({
+                    value: cashReceived,
+                    onChange: setCashReceived,
+                    mode: 'number',
+                    title: 'Verilen Nakit Tutarı (₺)',
+                  })}
                   onClick={() => openKeyboard({
+                    value: cashReceived,
+                    onChange: setCashReceived,
+                    mode: 'number',
+                    title: 'Verilen Nakit Tutarı (₺)',
+                  })}
+                  onTouchEnd={() => openKeyboard({
                     value: cashReceived,
                     onChange: setCashReceived,
                     mode: 'number',

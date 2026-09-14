@@ -1,8 +1,8 @@
-import { memo, useState } from 'react'
+import { memo } from 'react'
 import { ClipboardList, Coffee, CreditCard, Keyboard, User } from 'lucide-react'
 import { formatCurrency } from '../lib/format'
 import { CartItemRow } from './cart/CartItemRow'
-import { VirtualKeyboard } from './VirtualKeyboard'
+import { useVirtualKeyboard } from '../context/VirtualKeyboardContext'
 import type { CartItem, OrderTotals, ItemDiscount } from '../types'
 
 interface CartPanelProps {
@@ -42,8 +42,26 @@ export const CartPanel = memo(function CartPanel({
   orderNumber,
   totals,
 }: CartPanelProps) {
+  const { openKeyboard } = useVirtualKeyboard()
   const cartIsEmpty = cart.length === 0
-  const [activeKb, setActiveKb] = useState<'name' | 'note' | null>(null)
+
+  const handleOpenCustomerNameKb = () => {
+    openKeyboard({
+      value: customerName,
+      onChange: onCustomerNameChange,
+      mode: 'text',
+      title: 'Müşteri Adı Girin',
+    })
+  }
+
+  const handleOpenNoteKb = () => {
+    openKeyboard({
+      value: note,
+      onChange: onNoteChange,
+      mode: 'text',
+      title: 'Sipariş Notu Girin',
+    })
+  }
 
   return (
     <aside className="cart-panel surface" aria-label="Aktif sipariş sepeti">
@@ -93,7 +111,9 @@ export const CartPanel = memo(function CartPanel({
               className="customer-name-input"
               value={customerName}
               onChange={(event) => onCustomerNameChange(event.target.value)}
-              onClick={() => setActiveKb('name')}
+              onFocus={handleOpenCustomerNameKb}
+              onClick={handleOpenCustomerNameKb}
+              onTouchEnd={handleOpenCustomerNameKb}
               placeholder="Müşteri Adı (örn. Ahmet Bey, Masa'daki kız)"
               maxLength={40}
               aria-label="Müşteri adı"
@@ -102,7 +122,16 @@ export const CartPanel = memo(function CartPanel({
           <button
             type="button"
             className="p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 transition-colors ml-1"
-            onClick={() => setActiveKb('name')}
+            onClick={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              handleOpenCustomerNameKb()
+            }}
+            onTouchEnd={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              handleOpenCustomerNameKb()
+            }}
             title="Sanal Klavye Aç"
           >
             <Keyboard size={15} />
@@ -113,14 +142,25 @@ export const CartPanel = memo(function CartPanel({
             className="note-area pr-8"
             value={note}
             onChange={(event) => onNoteChange(event.target.value)}
-            onClick={() => setActiveKb('note')}
+            onFocus={handleOpenNoteKb}
+            onClick={handleOpenNoteKb}
+            onTouchEnd={handleOpenNoteKb}
             placeholder="Sipariş Notu (örn. yulaf sütü, şekersiz)"
             aria-label="Sipariş notu"
           />
           <button
             type="button"
             className="absolute top-2 right-2 p-1.5 rounded-lg bg-stone-100 hover:bg-stone-200 text-stone-600 transition-colors"
-            onClick={() => setActiveKb('note')}
+            onClick={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              handleOpenNoteKb()
+            }}
+            onTouchEnd={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              handleOpenNoteKb()
+            }}
             title="Sanal Klavye Aç"
           >
             <Keyboard size={14} />
@@ -137,18 +177,6 @@ export const CartPanel = memo(function CartPanel({
           <button type="button" className="pay-button" style={{ flex: 1 }} disabled={cartIsEmpty} onClick={onOpenPayment}><CreditCard size={19} /> Ödeme <span className="shortcut ml-1 bg-white/10 text-white/75">F4</span></button>
         </div>
       </div>
-
-      {/* Virtual Keyboard Component */}
-      <VirtualKeyboard
-        isOpen={activeKb !== null}
-        onClose={() => setActiveKb(null)}
-        title={activeKb === 'name' ? 'Müşteri Adı Girin' : 'Sipariş Notu Girin'}
-        value={activeKb === 'name' ? customerName : note}
-        onChange={(val) => {
-          if (activeKb === 'name') onCustomerNameChange(val)
-          if (activeKb === 'note') onNoteChange(val)
-        }}
-      />
     </aside>
   )
 })

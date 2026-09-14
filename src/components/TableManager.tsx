@@ -65,7 +65,19 @@ export function TableManager({ isOpen, onClose, tables, onSave, onDelete }: Tabl
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
+                  onFocus={() => openKeyboard({
+                    value: query,
+                    onChange: setQuery,
+                    mode: 'text',
+                    title: 'Masa Arama',
+                  })}
                   onClick={() => openKeyboard({
+                    value: query,
+                    onChange: setQuery,
+                    mode: 'text',
+                    title: 'Masa Arama',
+                  })}
+                  onTouchEnd={() => openKeyboard({
                     value: query,
                     onChange: setQuery,
                     mode: 'text',
@@ -122,7 +134,19 @@ export function TableManager({ isOpen, onClose, tables, onSave, onDelete }: Tabl
               <input
                 value={draft.name}
                 onChange={(e) => setDraft({ name: e.target.value })}
+                onFocus={() => openKeyboard({
+                  value: draft.name,
+                  onChange: (val) => setDraft({ name: val }),
+                  mode: 'text',
+                  title: 'Masa Adı Girin',
+                })}
                 onClick={() => openKeyboard({
+                  value: draft.name,
+                  onChange: (val) => setDraft({ name: val }),
+                  mode: 'text',
+                  title: 'Masa Adı Girin',
+                })}
+                onTouchEnd={() => openKeyboard({
                   value: draft.name,
                   onChange: (val) => setDraft({ name: val }),
                   mode: 'text',

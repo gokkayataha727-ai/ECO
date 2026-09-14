@@ -176,7 +176,9 @@ export function ProductManager({ isOpen, onClose, products, onSave, onDelete, in
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
+                  onFocus={() => openKeyboard({ value: query, onChange: setQuery, mode: 'text', title: 'Ürün Arama' })}
                   onClick={() => openKeyboard({ value: query, onChange: setQuery, mode: 'text', title: 'Ürün Arama' })}
+                  onTouchEnd={() => openKeyboard({ value: query, onChange: setQuery, mode: 'text', title: 'Ürün Arama' })}
                   placeholder="Ürün ara..."
                   aria-label="Menüde ürün ara"
                 />
@@ -230,7 +232,19 @@ export function ProductManager({ isOpen, onClose, products, onSave, onDelete, in
               <input
                 value={draft.name}
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                onFocus={() => openKeyboard({
+                  value: draft.name,
+                  onChange: (val) => setDraft((d) => ({ ...d, name: val })),
+                  mode: 'text',
+                  title: 'Ürün Adı Girin',
+                })}
                 onClick={() => openKeyboard({
+                  value: draft.name,
+                  onChange: (val) => setDraft((d) => ({ ...d, name: val })),
+                  mode: 'text',
+                  title: 'Ürün Adı Girin',
+                })}
+                onTouchEnd={() => openKeyboard({
                   value: draft.name,
                   onChange: (val) => setDraft((d) => ({ ...d, name: val })),
                   mode: 'text',
@@ -244,7 +258,19 @@ export function ProductManager({ isOpen, onClose, products, onSave, onDelete, in
               <input
                 value={draft.description}
                 onChange={(e) => setDraft({ ...draft, description: e.target.value })}
+                onFocus={() => openKeyboard({
+                  value: draft.description,
+                  onChange: (val) => setDraft((d) => ({ ...d, description: val })),
+                  mode: 'text',
+                  title: 'Açıklama Girin',
+                })}
                 onClick={() => openKeyboard({
+                  value: draft.description,
+                  onChange: (val) => setDraft((d) => ({ ...d, description: val })),
+                  mode: 'text',
+                  title: 'Açıklama Girin',
+                })}
+                onTouchEnd={() => openKeyboard({
                   value: draft.description,
                   onChange: (val) => setDraft((d) => ({ ...d, description: val })),
                   mode: 'text',
@@ -262,7 +288,19 @@ export function ProductManager({ isOpen, onClose, products, onSave, onDelete, in
                   step="0.5"
                   value={draft.price || ''}
                   onChange={(e) => setDraft({ ...draft, price: Number(e.target.value) })}
+                  onFocus={() => openKeyboard({
+                    value: draft.price ? String(draft.price) : '',
+                    onChange: (val) => setDraft((d) => ({ ...d, price: Number(val) || 0 })),
+                    mode: 'number',
+                    title: 'Ürün Fiyatı (₺)',
+                  })}
                   onClick={() => openKeyboard({
+                    value: draft.price ? String(draft.price) : '',
+                    onChange: (val) => setDraft((d) => ({ ...d, price: Number(val) || 0 })),
+                    mode: 'number',
+                    title: 'Ürün Fiyatı (₺)',
+                  })}
+                  onTouchEnd={() => openKeyboard({
                     value: draft.price ? String(draft.price) : '',
                     onChange: (val) => setDraft((d) => ({ ...d, price: Number(val) || 0 })),
                     mode: 'number',

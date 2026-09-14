@@ -21,6 +21,7 @@ interface VirtualKeyboardContextType {
     onDone?: () => void
   }) => void
   closeKeyboard: () => void
+  updateKeyboardValue: (val: string) => void
 }
 
 const VirtualKeyboardContext = createContext<VirtualKeyboardContextType | null>(null)
@@ -60,12 +61,16 @@ export const VirtualKeyboardProvider: React.FC<{ children: React.ReactNode }> = 
     []
   )
 
+  const updateKeyboardValue = useCallback((val: string) => {
+    setKeyboardState((prev) => ({ ...prev, value: val }))
+  }, [])
+
   const closeKeyboard = useCallback(() => {
     setKeyboardState((prev) => ({ ...prev, isOpen: false }))
   }, [])
 
   return (
-    <VirtualKeyboardContext.Provider value={{ keyboardState, openKeyboard, closeKeyboard }}>
+    <VirtualKeyboardContext.Provider value={{ keyboardState, openKeyboard, closeKeyboard, updateKeyboardValue }}>
       {children}
     </VirtualKeyboardContext.Provider>
   )

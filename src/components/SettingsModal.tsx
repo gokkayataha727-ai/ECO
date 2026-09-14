@@ -14,6 +14,7 @@ import {
   RotateCcw,
   Download,
 } from 'lucide-react'
+import { useVirtualKeyboard } from '../context/VirtualKeyboardContext'
 import type { AppSettings } from '../types/settings'
 
 interface SettingsModalProps {
@@ -39,6 +40,7 @@ export function SettingsModal({
   onOpenLogoSettings,
   onResetData,
 }: SettingsModalProps) {
+  const { openKeyboard } = useVirtualKeyboard()
   const [activeTab, setActiveTab] = useState<TabType>('appearance')
   const [formData, setFormData] = useState<AppSettings>(settings)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
@@ -251,6 +253,24 @@ export function SettingsModal({
                     type="text"
                     value={formData.storeName}
                     onChange={(e) => handleChange('storeName', e.target.value)}
+                    onFocus={() => openKeyboard({
+                      value: formData.storeName,
+                      onChange: (val) => handleChange('storeName', val),
+                      mode: 'text',
+                      title: 'İşletme Adı Girin',
+                    })}
+                    onClick={() => openKeyboard({
+                      value: formData.storeName,
+                      onChange: (val) => handleChange('storeName', val),
+                      mode: 'text',
+                      title: 'İşletme Adı Girin',
+                    })}
+                    onTouchEnd={() => openKeyboard({
+                      value: formData.storeName,
+                      onChange: (val) => handleChange('storeName', val),
+                      mode: 'text',
+                      title: 'İşletme Adı Girin',
+                    })}
                     className="w-full px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
                     placeholder="Örn: Eco Coffee"
                   />
@@ -264,6 +284,24 @@ export function SettingsModal({
                     type="text"
                     value={formData.storeSub}
                     onChange={(e) => handleChange('storeSub', e.target.value)}
+                    onFocus={() => openKeyboard({
+                      value: formData.storeSub,
+                      onChange: (val) => handleChange('storeSub', val),
+                      mode: 'text',
+                      title: 'Alt Başlık Girin',
+                    })}
+                    onClick={() => openKeyboard({
+                      value: formData.storeSub,
+                      onChange: (val) => handleChange('storeSub', val),
+                      mode: 'text',
+                      title: 'Alt Başlık Girin',
+                    })}
+                    onTouchEnd={() => openKeyboard({
+                      value: formData.storeSub,
+                      onChange: (val) => handleChange('storeSub', val),
+                      mode: 'text',
+                      title: 'Alt Başlık Girin',
+                    })}
                     className="w-full px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
                     placeholder="Örn: Kahvenin iyi hali"
                   />
@@ -277,6 +315,24 @@ export function SettingsModal({
                     type="text"
                     value={formData.location}
                     onChange={(e) => handleChange('location', e.target.value)}
+                    onFocus={() => openKeyboard({
+                      value: formData.location,
+                      onChange: (val) => handleChange('location', val),
+                      mode: 'text',
+                      title: 'Şube / Konum Girin',
+                    })}
+                    onClick={() => openKeyboard({
+                      value: formData.location,
+                      onChange: (val) => handleChange('location', val),
+                      mode: 'text',
+                      title: 'Şube / Konum Girin',
+                    })}
+                    onTouchEnd={() => openKeyboard({
+                      value: formData.location,
+                      onChange: (val) => handleChange('location', val),
+                      mode: 'text',
+                      title: 'Şube / Konum Girin',
+                    })}
                     className="w-full px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
                     placeholder="Örn: Eco Coffee · Nurdağı"
                   />
@@ -290,6 +346,24 @@ export function SettingsModal({
                     type="text"
                     value={formData.cashierName}
                     onChange={(e) => handleChange('cashierName', e.target.value)}
+                    onFocus={() => openKeyboard({
+                      value: formData.cashierName,
+                      onChange: (val) => handleChange('cashierName', val),
+                      mode: 'text',
+                      title: 'Kasiyer İsmi Girin',
+                    })}
+                    onClick={() => openKeyboard({
+                      value: formData.cashierName,
+                      onChange: (val) => handleChange('cashierName', val),
+                      mode: 'text',
+                      title: 'Kasiyer İsmi Girin',
+                    })}
+                    onTouchEnd={() => openKeyboard({
+                      value: formData.cashierName,
+                      onChange: (val) => handleChange('cashierName', val),
+                      mode: 'text',
+                      title: 'Kasiyer İsmi Girin',
+                    })}
                     className="w-full px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
                     placeholder="Örn: ECO"
                   />

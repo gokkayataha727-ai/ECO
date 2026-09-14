@@ -64,10 +64,10 @@ export const CartPanel = memo(function CartPanel({
   }
 
   return (
-    <aside className="cart-panel surface" aria-label="Aktif sipariş sepeti">
+    <aside className="cart-panel" aria-label="Aktif sipariş sepeti">
       <div className="cart-head">
         <div>
-          <p className="section-kicker">Masa Siparişi</p>
+          <p className="section-kicker">MASA SİPARİŞİ</p>
           <h2 className="section-title cart-title">Aktif Sipariş</h2>
           <span className="order-code">#{orderNumber}</span>
         </div>

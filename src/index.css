@@ -164,7 +164,7 @@ button:disabled {
 
 .pos-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  grid-template-columns: minmax(0, 1fr) 380px;
   gap: 14px;
   width: min(1480px, 100%);
   max-width: 100%;
@@ -368,6 +368,7 @@ button:disabled {
 .product-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+  grid-auto-rows: minmax(min-content, auto);
   gap: 12px;
   margin-top: 14px;
   flex: 1;
@@ -375,8 +376,9 @@ button:disabled {
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 4px;
+  padding-bottom: 8px;
   align-content: start;
-  align-items: start;
+  align-items: stretch;
 }
 
 .product-card {
@@ -384,10 +386,8 @@ button:disabled {
   display: flex;
   flex-direction: column;
   min-height: 155px;
-  height: auto;
-  /* overflow:hidden removed — it was clipping card content when grid stretched the cell */
-  overflow-x: clip;    /* prevent horizontal bleed only */
-  overflow-y: visible; /* let vertical content breathe */
+  /* No explicit height — card stretches with grid row, content fills via flex */
+  overflow: hidden;
   padding: 13px;
   border: 1px solid #e2dad0;
   border-radius: 18px;
@@ -397,6 +397,9 @@ button:disabled {
   transition: .2s ease;
   isolation: isolate;
   cursor: pointer;
+  min-width: 0;
+  box-sizing: border-box;
+  contain: layout style;
 }
 
 .product-card:hover {
@@ -514,6 +517,7 @@ textarea:focus-visible {
   line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  word-break: break-word;
 }
 
 .product-meta {
@@ -599,6 +603,8 @@ textarea:focus-visible {
   background: #fdfbf7;
   border-left: 1px solid #e9e1d8;
   z-index: 10;
+  min-width: 0;
+  /* Grid controls width via grid-template-columns — no fixed width needed here */
 }
 
 .cart-head {
@@ -2639,7 +2645,11 @@ textarea:focus-visible {
 @media (max-width: 540px) {
   .pos-layout {
     grid-template-columns: 1fr;
+    grid-template-rows: auto auto;
     overflow-y: auto;
+  }
+  .catalog {
+    height: auto;
   }
 }
 
@@ -3988,13 +3998,18 @@ body.kiosk-mode .app-shell {
    ═══════════════════════════════════════ */
 
 body.kiosk-mode .pos-layout {
-  grid-template-columns: minmax(0, 1fr) minmax(340px, 420px);
+  grid-template-columns: minmax(0, 1fr) 420px;
+  gap: 18px;
 }
 
 /* Cart panel must always be fully visible */
 body.kiosk-mode .cart-panel {
   display: flex;
   flex-direction: column;
+  border-radius: 20px;
+  border: 1px solid rgba(93, 72, 56, .1);
+  box-shadow: 0 16px 40px rgba(65, 41, 27, .09);
+  /* Width controlled by grid-template-columns on .pos-layout */
   min-width: 320px;
   height: 100%;
   overflow: hidden;

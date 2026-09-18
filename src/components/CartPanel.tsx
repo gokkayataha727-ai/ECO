@@ -74,98 +74,103 @@ export const CartPanel = memo(function CartPanel({
         {!cartIsEmpty && <div className="cart-head-actions"><button type="button" className="adisyon-link" onClick={onOpenAdisyon}><ClipboardList size={14} /> Adisyon</button><button type="button" className="clear-button" onClick={() => onConfirmClearChange(true)}>Tümünü temizle</button></div>}
       </div>
 
-      {cartIsEmpty ? (
-        <div className="cart-empty">
-          <div>
-            <div className="cart-empty-illustration"><Coffee size={38} strokeWidth={1.4} /></div>
-            <h3 className="cart-empty-title">Sepetiniz boş</h3>
-            <p className="muted cart-empty-text">Menüden ürün seçerek siparişinizi oluşturmaya başlayın.</p>
+      <div className="cart-scrollable-area" style={{ flex: 1, minHeight: 0, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+        {cartIsEmpty ? (
+          <div className="cart-empty">
+            <div>
+              <div className="cart-empty-illustration"><Coffee size={38} strokeWidth={1.4} /></div>
+              <h3 className="cart-empty-title">Sepetiniz boş</h3>
+              <p className="muted cart-empty-text">Menüden ürün seçerek siparişinizi oluşturmaya başlayın.</p>
+            </div>
+          </div>
+        ) : (
+          <div className="cart-items" style={{ flex: '1 0 auto' }}>
+            {cart.map((item) => (
+              <CartItemRow
+                key={item.cartItemId}
+                item={item}
+                onUpdateQuantity={onUpdateQuantity}
+                onRemoveItem={onRemoveItem}
+                onApplyDiscount={onApplyItemDiscount}
+              />
+            ))}
+          </div>
+        )}
+
+        <div className="cart-extra-inputs" style={{ padding: '0 16px 12px', flexShrink: 0 }}>
+          <div className="customer-name-row" style={{ marginTop: 0 }}>
+            <div className="customer-name-row-inner">
+              <User size={14} className="customer-name-icon" />
+              <input
+                type="text"
+                className="customer-name-input"
+                value={customerName}
+                onChange={(event) => onCustomerNameChange(event.target.value)}
+                onFocus={handleOpenCustomerNameKb}
+                onClick={handleOpenCustomerNameKb}
+                onTouchEnd={handleOpenCustomerNameKb}
+                placeholder="Müşteri Adı (örn. Ahmet Bey, Masa'daki kız)"
+                maxLength={40}
+                aria-label="Müşteri adı"
+              />
+            </div>
+            <button
+              type="button"
+              className="keyboard-trigger-btn cart-kb-btn"
+              onClick={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                handleOpenCustomerNameKb()
+              }}
+              onTouchEnd={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                handleOpenCustomerNameKb()
+              }}
+              title="Sanal Klavye Aç"
+            >
+              <Keyboard size={15} />
+            </button>
+          </div>
+          <div className="note-area-wrap">
+            <textarea
+              className="note-area"
+              value={note}
+              onChange={(event) => onNoteChange(event.target.value)}
+              onFocus={handleOpenNoteKb}
+              onClick={handleOpenNoteKb}
+              onTouchEnd={handleOpenNoteKb}
+              placeholder="Sipariş Notu (örn. yulaf sütü, şekersiz)"
+              aria-label="Sipariş notu"
+            />
+            <button
+              type="button"
+              className="keyboard-trigger-btn note-kb-btn"
+              onClick={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                handleOpenNoteKb()
+              }}
+              onTouchEnd={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                handleOpenNoteKb()
+              }}
+              title="Sanal Klavye Aç"
+            >
+              <Keyboard size={14} />
+            </button>
           </div>
         </div>
-      ) : (
-        <div className="cart-items">
-          {cart.map((item) => (
-            <CartItemRow
-              key={item.cartItemId}
-              item={item}
-              onUpdateQuantity={onUpdateQuantity}
-              onRemoveItem={onRemoveItem}
-              onApplyDiscount={onApplyItemDiscount}
-            />
-          ))}
-        </div>
-      )}
+      </div>
 
-      <div className="cart-bottom">
+      <div className="cart-bottom" style={{ paddingTop: '10px' }}>
         {confirmClear && (
           <div className="clear-confirm" role="alert">
             Sepetteki tüm ürünler kaldırılsın mı?
             <div><button type="button" onClick={onClear}>Evet, temizle</button><button type="button" onClick={() => onConfirmClearChange(false)}>Vazgeç</button></div>
           </div>
         )}
-        <div className="customer-name-row">
-          <div className="customer-name-row-inner">
-            <User size={14} className="customer-name-icon" />
-            <input
-              type="text"
-              className="customer-name-input"
-              value={customerName}
-              onChange={(event) => onCustomerNameChange(event.target.value)}
-              onFocus={handleOpenCustomerNameKb}
-              onClick={handleOpenCustomerNameKb}
-              onTouchEnd={handleOpenCustomerNameKb}
-              placeholder="Müşteri Adı (örn. Ahmet Bey, Masa'daki kız)"
-              maxLength={40}
-              aria-label="Müşteri adı"
-            />
-          </div>
-          <button
-            type="button"
-            className="keyboard-trigger-btn cart-kb-btn"
-            onClick={(e) => {
-              e.stopPropagation()
-              e.preventDefault()
-              handleOpenCustomerNameKb()
-            }}
-            onTouchEnd={(e) => {
-              e.stopPropagation()
-              e.preventDefault()
-              handleOpenCustomerNameKb()
-            }}
-            title="Sanal Klavye Aç"
-          >
-            <Keyboard size={15} />
-          </button>
-        </div>
-        <div className="note-area-wrap">
-          <textarea
-            className="note-area"
-            value={note}
-            onChange={(event) => onNoteChange(event.target.value)}
-            onFocus={handleOpenNoteKb}
-            onClick={handleOpenNoteKb}
-            onTouchEnd={handleOpenNoteKb}
-            placeholder="Sipariş Notu (örn. yulaf sütü, şekersiz)"
-            aria-label="Sipariş notu"
-          />
-          <button
-            type="button"
-            className="keyboard-trigger-btn note-kb-btn"
-            onClick={(e) => {
-              e.stopPropagation()
-              e.preventDefault()
-              handleOpenNoteKb()
-            }}
-            onTouchEnd={(e) => {
-              e.stopPropagation()
-              e.preventDefault()
-              handleOpenNoteKb()
-            }}
-            title="Sanal Klavye Aç"
-          >
-            <Keyboard size={14} />
-          </button>
-        </div>
         <div className="totals">
           <div className="total-row"><span>Ara Toplam</span><strong>{formatCurrency(totals.subtotal)}</strong></div>
           <div className="total-row discount"><span>İndirim</span><strong>-{formatCurrency(totals.discount)}</strong></div>

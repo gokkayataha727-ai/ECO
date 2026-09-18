@@ -747,9 +747,12 @@ textarea:focus-visible {
 }
 
 .cart-empty {
-  display: grid;
-  min-height: 285px;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  flex: 1 1 0%;
+  min-height: 0;
   padding: 25px;
   text-align: center;
 }
@@ -932,7 +935,7 @@ textarea:focus-visible {
   justify-content: center;
   gap: 9px;
   width: 100%;
-  min-height: 58px;
+  min-height: 52px;
   border: 0;
   border-radius: 14px;
   color: #fffdf9;
@@ -2532,6 +2535,7 @@ textarea:focus-visible {
 
 .table-order-body {
   flex: 1;
+  height: 100%;
   min-height: 0;
   overflow: hidden;
   display: grid !important;

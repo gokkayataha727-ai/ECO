@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
 import { X } from 'lucide-react'
-import { useVirtualKeyboard } from '../../context/VirtualKeyboardContext'
 import type { ItemDiscount } from '../../types'
 
 interface DiscountPopoverProps {
@@ -11,23 +10,10 @@ interface DiscountPopoverProps {
 }
 
 export function DiscountPopover({ itemTotal, currentDiscount, onApply, onClose }: DiscountPopoverProps) {
-  const { openKeyboard } = useVirtualKeyboard()
   const [type, setType] = useState<'percentage' | 'amount'>(currentDiscount?.type || 'percentage')
   const [value, setValue] = useState(currentDiscount?.value ? String(currentDiscount.value) : '')
   const [error, setError] = useState('')
   const popoverRef = useRef<HTMLDivElement>(null)
-
-  const handleOpenKb = () => {
-    openKeyboard({
-      value,
-      onChange: (val) => {
-        setValue(val)
-        setError('')
-      },
-      mode: 'number',
-      title: type === 'percentage' ? 'İndirim Oranı (%)' : 'İndirim Tutarı (₺)',
-    })
-  }
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -106,9 +92,6 @@ export function DiscountPopover({ itemTotal, currentDiscount, onApply, onClose }
               setValue(e.target.value)
               setError('')
             }}
-            onFocus={handleOpenKb}
-            onClick={handleOpenKb}
-            onTouchEnd={handleOpenKb}
             onKeyDown={(e) => {
               if (e.key === 'Enter') handleApply()
             }}

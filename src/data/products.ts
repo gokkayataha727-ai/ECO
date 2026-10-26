@@ -3,776 +3,681 @@ import type { Product } from '../types'
 export const categories = ['Tümü', 'Sıcak Kahveler', 'Soğuk İçecekler', 'Tatlılar', 'Atıştırmalıklar', 'Çaylar'] as const
 
 export const products: Product[] = [
-  // ================= ESPRESSO BAZLI KAHVELER =================
-  {
-    id: 'prod-filtre-kahve',
-    name: 'Filtre Kahve',
-    category: 'Sıcak Kahveler',
-    price: 130,
-    description: 'Taze demlenmiş, zengin aromalı filtre kahve',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'prod-espresso',
-    name: 'Espresso',
-    category: 'Sıcak Kahveler',
-    price: 70,
-    description: 'Yoğun gövdeli ve kadifemsi kremalı geleneksel espresso',
-    optionGroups: [
-      {
-        id: 'opt-shot',
-        name: 'Porsiyon Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-tek', name: 'Tek Shot', priceDelta: 0, isDefault: true },
-          { id: 'opt-cift', name: 'Çift Shot', priceDelta: 30, isDefault: false },
-        ],
-      },
-    ],
-  },
   {
     id: 'prod-americano',
-    name: 'Americano',
+    name: "Americano",
     category: 'Sıcak Kahveler',
-    price: 140,
-    description: 'Espresso ve sıcak suyun yumuşak içimli uyumu',
+    price: 120.0,
+    description: "Espresso ve sıcak suyun uyumu",
+  },
+  {
+    id: 'prod-latte',
+    name: "Latte",
+    category: 'Sıcak Kahveler',
+    price: 140.0,
+    description: "Espresso ve kadifemsi sıcak süt",
+  },
+  {
+    id: 'prod-mocha-white-choc-mocha',
+    name: "Mocha / White Choc Mocha",
+    category: 'Sıcak Kahveler',
+    price: 160.0,
+    description: "Çikolata, espresso ve sıcak süt",
     optionGroups: [
       {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'prod-caffe-latte',
-    name: 'Caffe Latte',
-    category: 'Sıcak Kahveler',
-    price: 140,
-    description: 'Zengin espresso ve buharla ısıtılmış kadifemsi süt',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'prod-cappuccino',
-    name: 'Cappuccino',
-    category: 'Sıcak Kahveler',
-    price: 150,
-    description: 'Espresso, sıcak süt ve yoğun süt köpüğü',
-    badge: 'Yeni',
-  },
-  {
-    id: 'prod-flat-white',
-    name: 'Flat White',
-    category: 'Sıcak Kahveler',
-    price: 145,
-    description: 'Çift shot espresso ve pürüzsüz mikro süt köpüğü',
+            "id": "opt-mocha-choice",
+            "name": "Çeşit Seçimi",
+            "selectionType": "single",
+            "required": true,
+            "options": [
+                  {
+                        "id": "opt-mocha",
+                        "name": "Mocha",
+                        "priceDelta": 0,
+                        "isDefault": true
+                  },
+                  {
+                        "id": "opt-white-mocha",
+                        "name": "White Choc Mocha",
+                        "priceDelta": 0,
+                        "isDefault": false
+                  }
+            ]
+      }
+],
   },
   {
     id: 'prod-caramel-macchiato',
-    name: 'Caramel Macchiato',
+    name: "Caramel Macchiato",
     category: 'Sıcak Kahveler',
-    price: 150,
-    description: 'Vanilya şurubu, sıcak süt, espresso ve enfes karamel sosu',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
+    price: 160.0,
+    description: "Vanilya, sıcak süt, espresso ve karamel sosu",
   },
   {
-    id: 'prod-caffe-mocha',
-    name: 'Caffe Mocha',
+    id: 'prod-flat-white',
+    name: "Flat White",
     category: 'Sıcak Kahveler',
-    price: 150,
-    description: 'Espresso, çikolata sosu, sıcak süt ve lezzetli köpük',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
+    price: 140.0,
+    description: "Double espresso ve ince süt köpüğü",
   },
   {
-    id: 'prod-white-chocolate-mocha',
-    name: 'White Chocolate Mocha',
+    id: 'prod-expresso',
+    name: "Expresso",
     category: 'Sıcak Kahveler',
-    price: 150,
-    description: 'Espresso, özel beyaz çikolata sosu ve kıvamlı süt',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
-  },
-
-  // ================= ECO ÖZEL SERİ LATTELER =================
-  {
-    id: 'prod-eco-latte',
-    name: 'Eco Latte',
-    category: 'Sıcak Kahveler',
-    price: 160,
-    description: 'Eco Coffee özel reçeteli imza lezzet',
-    badge: 'Çok Satan',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-      {
-        id: 'opt-extra-syrup',
-        name: 'Ekstra Şurup',
-        selectionType: 'multiple',
-        required: false,
-        options: [
-          { id: 'opt-syrup', name: 'Extra Şurup İlavesi', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
+    price: 60.0,
+    description: "Yoğun gövdeli geleneksel espresso",
   },
   {
-    id: 'prod-toffee-nut-latte',
-    name: 'Toffee Nut Latte',
+    id: 'prod-filter-coffee',
+    name: "Filter Coffee",
     category: 'Sıcak Kahveler',
-    price: 160,
-    description: 'Karamelize fındık aromalı özel espresso ve süt harmanı',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
+    price: 120.0,
+    description: "Taze demlenmiş zengin filtre kahve",
   },
   {
-    id: 'prod-peri-latte',
-    name: 'Peri Latte',
+    id: 'prod-sutlu-kahve',
+    name: "Sütlü Kahve",
     category: 'Sıcak Kahveler',
-    price: 160,
-    description: 'Özel tatlı aromalı gurme latte reçetesi',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
+    price: 120.0,
+    description: "Yumuşak içimli sütlü kahve",
   },
   {
-    id: 'prod-ecopsi-latte',
-    name: 'Ecopsi Latte',
+    id: 'prod-balli-sut',
+    name: "Ballı Süt",
     category: 'Sıcak Kahveler',
-    price: 160,
-    description: 'Eco Coffee imza baharat aromalı gurme latte',
+    price: 100.0,
+    description: "Doğal bal ile tatlandırılmış sıcak süt",
+  },
+  {
+    id: 'prod-salep',
+    name: "Salep",
+    category: 'Sıcak Kahveler',
+    price: 140.0,
+    description: "Geleneksel sıcak salep ve tarçın",
+  },
+  {
+    id: 'prod-sicak-cikolata',
+    name: "Sıcak Çikolata",
+    category: 'Sıcak Kahveler',
+    price: 140.0,
+    description: "Yoğun kıvamlı sıcak çikolata",
+  },
+  {
+    id: 'prod-cikolatali-salep',
+    name: "Çikolatalı Salep",
+    category: 'Sıcak Kahveler',
+    price: 150.0,
+    description: "Çikolata aromalı sıcak salep",
+  },
+  {
+    id: 'prod-expresso-salep',
+    name: "Expresso Salep",
+    category: 'Sıcak Kahveler',
+    price: 150.0,
+    description: "Espresso ve salebin özel buluşması",
+  },
+  {
+    id: 'prod-aromali-sicak-cikolata',
+    name: "Aromalı Sıcak Çikolata (çilek / fındık / muz / frambuaz)",
+    category: 'Sıcak Kahveler',
+    price: 150.0,
+    description: "Özel meyve ve fındık aromalı sıcak çikolata",
     optionGroups: [
       {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
+            "id": "opt-sicak-cikolata-aroma",
+            "name": "Aroma Seçimi",
+            "selectionType": "single",
+            "required": true,
+            "options": [
+                  {
+                        "id": "opt-ac-cilek",
+                        "name": "Çilek",
+                        "priceDelta": 0,
+                        "isDefault": true
+                  },
+                  {
+                        "id": "opt-ac-findik",
+                        "name": "Fındık",
+                        "priceDelta": 0,
+                        "isDefault": false
+                  },
+                  {
+                        "id": "opt-ac-muz",
+                        "name": "Muz",
+                        "priceDelta": 0,
+                        "isDefault": false
+                  },
+                  {
+                        "id": "opt-ac-frambuaz",
+                        "name": "Frambuaz",
+                        "priceDelta": 0,
+                        "isDefault": false
+                  }
+            ]
+      }
+],
   },
-
-  // ================= GELENEKSEL & ÇAYLAR =================
   {
     id: 'prod-turk-kahvesi',
-    name: 'Türk Kahvesi',
+    name: "Türk Kahvesi",
     category: 'Sıcak Kahveler',
-    price: 90,
-    description: 'Közde pişirilmiş geleneksel Türk kahvesi',
+    price: 100.0,
+    description: "Geleneksel taze çekilmiş Türk kahvesi",
   },
   {
-    id: 'prod-dibek-kahvesi',
-    name: 'Dibek Kahvesi',
+    id: 'prod-sutlu-turk-kahvesi',
+    name: "Sütlü Türk Kahvesi",
     category: 'Sıcak Kahveler',
-    price: 100,
-    description: 'Yumuşak içimli, özel baharatlı taş dibek kahvesi',
+    price: 120.0,
+    description: "Sütle pişirilmiş yumuşak içimli Türk kahvesi",
+  },
+  {
+    id: 'prod-double-turk-kahvesi',
+    name: "Double Türk Kahvesi",
+    category: 'Sıcak Kahveler',
+    price: 150.0,
+    description: "Çift porsiyon Türk kahvesi",
   },
   {
     id: 'prod-damla-sakizli-turk-kahvesi',
-    name: 'Damla Sakızlı Türk Kahvesi',
+    name: "Damla Sakızlı Türk Kahvesi",
     category: 'Sıcak Kahveler',
-    price: 100,
-    description: 'Halis damla sakızı aromalı Türk kahvesi',
+    price: 120.0,
+    description: "Ege damla sakızı aromalı Türk kahvesi",
+  },
+  {
+    id: 'prod-dibek-kahvesi',
+    name: "Dibek Kahvesi",
+    category: 'Sıcak Kahveler',
+    price: 120.0,
+    description: "Taş dibekte dövülmüş aromatik kahve",
   },
   {
     id: 'prod-menengic-kahvesi',
-    name: 'Menengiç Kahvesi',
+    name: "Menengiç Kahvesi",
     category: 'Sıcak Kahveler',
-    price: 120,
-    description: 'Doğal çitlembik tanelerinden hazırlanan sütlü kahve',
+    price: 120.0,
+    description: "Kafeinsiz doğal yabani fıstık kahvesi",
   },
   {
-    id: 'prod-taze-demleme-cay',
-    name: 'Taze Demleme Çay',
+    id: 'prod-cay',
+    name: "Çay",
     category: 'Çaylar',
-    price: 40,
-    description: 'Rize yapraklarından taze demlenmiş geleneksel bardak çay',
+    price: 30.0,
+    description: "Taze demlenmiş Karadeniz çayı",
   },
-
-  // ================= SOĞUK İÇECEKLER & FRAPPE & MILKSHAKE =================
   {
-    id: 'prod-soguk-turk-kahvesi',
-    name: 'Soğuk Türk Kahvesi',
+    id: 'prod-fincan-cay',
+    name: "Fincan Çay",
+    category: 'Çaylar',
+    price: 50.0,
+    description: "Büyük fincanda taze demlenmiş çay",
+  },
+  {
+    id: 'prod-bitki-caylari',
+    name: "Bitki Çayları",
+    category: 'Çaylar',
+    price: 100.0,
+    description: "Özel seçilmiş şifalı bitki çayları",
+  },
+  {
+    id: 'prod-ice-americano',
+    name: "Ice Americano",
     category: 'Soğuk İçecekler',
-    price: 120,
-    description: 'Buzlu ve serinletici Türk kahvesi lezzeti',
+    price: 130.0,
+    description: "Espresso, soğuk su ve buz",
+  },
+  {
+    id: 'prod-ice-latte',
+    name: "Ice Latte",
+    category: 'Soğuk İçecekler',
+    price: 150.0,
+    description: "Espresso, soğuk süt ve ferahlatıcı buz",
+  },
+  {
+    id: 'prod-ice-mocha-white-choc-mocha',
+    name: "Ice Mocha / White Choc Mocha",
+    category: 'Soğuk İçecekler',
+    price: 170.0,
+    description: "Buzlu çikolatalı espresso ve soğuk süt",
     optionGroups: [
       {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 30, isDefault: false },
-        ],
-      },
-    ],
+            "id": "opt-ice-mocha-choice",
+            "name": "Çeşit Seçimi",
+            "selectionType": "single",
+            "required": true,
+            "options": [
+                  {
+                        "id": "opt-ice-mocha",
+                        "name": "Ice Mocha",
+                        "priceDelta": 0,
+                        "isDefault": true
+                  },
+                  {
+                        "id": "opt-ice-white-mocha",
+                        "name": "Ice White Choc Mocha",
+                        "priceDelta": 0,
+                        "isDefault": false
+                  }
+            ]
+      }
+],
   },
   {
-    id: 'prod-klasik-frappe',
-    name: 'Klasik Frappe',
+    id: 'prod-ice-caramel-macchiato',
+    name: "Ice Caramel Macchiato",
     category: 'Soğuk İçecekler',
-    price: 170,
-    description: 'Karamel, Çikolata veya Vanilya aromalı soğuk kahve frappe',
+    price: 170.0,
+    description: "Vanilya, soğuk süt, buz, espresso ve karamel sosu",
+  },
+  {
+    id: 'prod-bubble-tea',
+    name: "Bubble Tea (yaban mersini / çilek / mango)",
+    category: 'Soğuk İçecekler',
+    price: 150.0,
+    description: "Patlayan meyveli boba taneleriyle serinletici çay",
     optionGroups: [
       {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-      {
-        id: 'opt-aroma',
-        name: 'Aroma Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'aroma-karamel', name: 'Karamel', priceDelta: 0, isDefault: true },
-          { id: 'aroma-cikolata', name: 'Çikolata', priceDelta: 0, isDefault: false },
-          { id: 'aroma-vanilya', name: 'Vanilya', priceDelta: 0, isDefault: false },
-        ],
-      },
-    ],
+            "id": "opt-bubble-tea-flavor",
+            "name": "Aroma Seçimi",
+            "selectionType": "single",
+            "required": true,
+            "options": [
+                  {
+                        "id": "opt-bt-yaban-mersini",
+                        "name": "Yaban Mersini",
+                        "priceDelta": 0,
+                        "isDefault": true
+                  },
+                  {
+                        "id": "opt-bt-cilek",
+                        "name": "Çilek",
+                        "priceDelta": 0,
+                        "isDefault": false
+                  },
+                  {
+                        "id": "opt-bt-mango",
+                        "name": "Mango",
+                        "priceDelta": 0,
+                        "isDefault": false
+                  }
+            ]
+      }
+],
   },
   {
-    id: 'prod-oreo-frappe',
-    name: 'Oreo Frappe',
+    id: 'prod-milkshake-smoothie',
+    name: "Milkshake / Smoothie (muz / çilek / kavun / çikolata / orman meyvesi / vanilya)",
     category: 'Soğuk İçecekler',
-    price: 200,
-    description: 'Oreo bisküvi parçaları ve yoğun krema dokusuyla serinletici lezzet',
-    badge: 'Çok Satan',
+    price: 150.0,
+    description: "Yoğun kıvamlı taze meyve ve dondurma lezzeti",
     optionGroups: [
       {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
+            "id": "opt-ms-flavor",
+            "name": "Lezzet Seçimi",
+            "selectionType": "single",
+            "required": true,
+            "options": [
+                  {
+                        "id": "opt-ms-muz",
+                        "name": "Muz",
+                        "priceDelta": 0,
+                        "isDefault": true
+                  },
+                  {
+                        "id": "opt-ms-cilek",
+                        "name": "Çilek",
+                        "priceDelta": 0,
+                        "isDefault": false
+                  },
+                  {
+                        "id": "opt-ms-kavun",
+                        "name": "Kavun",
+                        "priceDelta": 0,
+                        "isDefault": false
+                  },
+                  {
+                        "id": "opt-ms-cikolata",
+                        "name": "Çikolata",
+                        "priceDelta": 0,
+                        "isDefault": false
+                  },
+                  {
+                        "id": "opt-ms-orman-meyvesi",
+                        "name": "Orman Meyvesi",
+                        "priceDelta": 0,
+                        "isDefault": false
+                  },
+                  {
+                        "id": "opt-ms-vanilya",
+                        "name": "Vanilya",
+                        "priceDelta": 0,
+                        "isDefault": false
+                  }
+            ]
+      }
+],
   },
   {
-    id: 'prod-cici-bebe-frappe',
-    name: 'Cici Bebe Frappe',
+    id: 'prod-frozen',
+    name: "Frozen (karpuz / çilek / kavun / muz)",
     category: 'Soğuk İçecekler',
-    price: 200,
-    description: 'Cici Bebe bisküvisi aromalı özel kremsi frappe',
+    price: 130.0,
+    description: "Buzla harmanlanmış ferahlatıcı meyve püresi",
     optionGroups: [
       {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
+            "id": "opt-frozen-flavor",
+            "name": "Meyve Seçimi",
+            "selectionType": "single",
+            "required": true,
+            "options": [
+                  {
+                        "id": "opt-fz-karpuz",
+                        "name": "Karpuz",
+                        "priceDelta": 0,
+                        "isDefault": true
+                  },
+                  {
+                        "id": "opt-fz-cilek",
+                        "name": "Çilek",
+                        "priceDelta": 0,
+                        "isDefault": false
+                  },
+                  {
+                        "id": "opt-fz-kavun",
+                        "name": "Kavun",
+                        "priceDelta": 0,
+                        "isDefault": false
+                  },
+                  {
+                        "id": "opt-fz-muz",
+                        "name": "Muz",
+                        "priceDelta": 0,
+                        "isDefault": false
+                  }
+            ]
+      }
+],
   },
   {
-    id: 'prod-meyveli-milkshake',
-    name: 'Meyveli Milkshake',
+    id: 'prod-frappe',
+    name: "Frappe (vanilya / fındık / karamel)",
     category: 'Soğuk İçecekler',
-    price: 170,
-    description: 'Çilek, Muz veya Vanilya aromalı yoğun milkshake',
+    price: 150.0,
+    description: "Köpürtülmüş soğuk kahve ve aroma",
     optionGroups: [
       {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-      {
-        id: 'opt-meyve',
-        name: 'Meyve Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'meyve-cilek', name: 'Çilek', priceDelta: 0, isDefault: true },
-          { id: 'meyve-muz', name: 'Muz', priceDelta: 0, isDefault: false },
-          { id: 'meyve-vanilya', name: 'Vanilya', priceDelta: 0, isDefault: false },
-        ],
-      },
-    ],
+            "id": "opt-frappe-flavor",
+            "name": "Aroma Seçimi",
+            "selectionType": "single",
+            "required": true,
+            "options": [
+                  {
+                        "id": "opt-fp-vanilya",
+                        "name": "Vanilya",
+                        "priceDelta": 0,
+                        "isDefault": true
+                  },
+                  {
+                        "id": "opt-fp-findik",
+                        "name": "Fındık",
+                        "priceDelta": 0,
+                        "isDefault": false
+                  },
+                  {
+                        "id": "opt-fp-karamel",
+                        "name": "Karamel",
+                        "priceDelta": 0,
+                        "isDefault": false
+                  }
+            ]
+      }
+],
   },
   {
-    id: 'prod-soslu-milkshake',
-    name: 'Soslu Milkshake',
+    id: 'prod-soguk-cikolata',
+    name: "Soğuk Çikolata",
     category: 'Soğuk İçecekler',
-    price: 170,
-    description: 'Çikolata veya Karamel soslu lezzetli milkshake',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-      {
-        id: 'opt-sos',
-        name: 'Sos Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'sos-cikolata', name: 'Çikolata Soslu', priceDelta: 0, isDefault: true },
-          { id: 'sos-karamel', name: 'Karamel Soslu', priceDelta: 0, isDefault: false },
-        ],
-      },
-    ],
+    price: 150.0,
+    description: "Buzlu enfes soğuk çikolata",
   },
   {
-    id: 'prod-oreo-milkshake',
-    name: 'Oreo Milkshake',
+    id: 'prod-salep-soguk',
+    name: "Salep",
     category: 'Soğuk İçecekler',
-    price: 200,
-    description: 'Oreo bisküvi parçacıklı soğuk milkshake',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
+    price: 150.0,
+    description: "Soğuk Salep",
   },
   {
-    id: 'prod-cici-bebe-milkshake',
-    name: 'Cici Bebe Milkshake',
+    id: 'prod-cool-lime',
+    name: "Cool Lime",
     category: 'Soğuk İçecekler',
-    price: 200,
-    description: 'Cici Bebe aromalı lezzetli ve serinletici milkshake',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
+    price: 160.0,
+    description: "Misket limonu ve nane ferahlığı",
   },
   {
-    id: 'prod-nutella-milkshake',
-    name: 'Nutella Milkshake',
+    id: 'prod-berry-hibiscus',
+    name: "Berry Hibiscus",
     category: 'Soğuk İçecekler',
-    price: 190,
-    description: 'Orijinal Nutella kakaolu fındık kremalı gurme milkshake',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
+    price: 160.0,
+    description: "Hibiskus ve böğürtlenli buzlu ferahlık",
   },
   {
-    id: 'prod-murver-milkshake',
-    name: 'Mürver Milkshake',
+    id: 'prod-su',
+    name: "Su",
     category: 'Soğuk İçecekler',
-    price: 160,
-    description: 'Mürver çiçeği özlü ferahlatıcı özel milkshake',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
+    price: 30.0,
+    description: "Doğal kaynak suyu",
   },
-
-  // ================= LİMONATALAR =================
   {
-    id: 'prod-klasik-limonata',
-    name: 'Klasik Limonata',
+    id: 'prod-limonata',
+    name: "Limonata",
     category: 'Soğuk İçecekler',
-    price: 150,
-    description: 'Taze sıkılmış el yapımı ferahlatıcı limonata',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
+    price: 100.0,
+    description: "Ev yapımı taze sıkılmış limonata",
   },
   {
-    id: 'prod-naneli-limonata',
-    name: 'Naneli Limonata',
+    id: 'prod-portakal-suyu',
+    name: "Portakal Suyu",
     category: 'Soğuk İçecekler',
-    price: 165,
-    description: 'Taze nane yaprakları ile hazırlanan ferahlatıcı limonata',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 15, isDefault: false },
-        ],
-      },
-    ],
+    price: 100.0,
+    description: "Taze sıkılmış %100 portakal suyu",
   },
   {
-    id: 'prod-cilekli-limonata',
-    name: 'Çilekli Limonata',
+    id: 'prod-sade-soda',
+    name: "Sade Soda",
     category: 'Soğuk İçecekler',
-    price: 165,
-    description: 'Taze çilek püresi harmanlı soğuk limonata',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-kucuk', name: 'Küçük', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 15, isDefault: false },
-        ],
-      },
-    ],
+    price: 50.0,
+    description: "Doğal maden suyu",
   },
-
-  // ================= SPECIAL KOKTEYLLER & FROZEN =================
   {
-    id: 'prod-frozen-cesitleri',
-    name: 'Frozen Çeşitleri',
+    id: 'prod-meyveli-soda',
+    name: "Meyveli Soda",
     category: 'Soğuk İçecekler',
-    price: 180,
-    description: 'Elma, Ananas, Yaban Mersini veya Karpuz aromalı buzlu frozen',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-tek', name: 'Tek', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-      {
-        id: 'opt-frozen-aroma',
-        name: 'Aroma Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'frz-elma', name: 'Elma', priceDelta: 0, isDefault: true },
-          { id: 'frz-ananas', name: 'Ananas', priceDelta: 0, isDefault: false },
-          { id: 'frz-yaban', name: 'Yaban Mersini', priceDelta: 0, isDefault: false },
-          { id: 'frz-karpuz', name: 'Karpuz', priceDelta: 0, isDefault: false },
-        ],
-      },
-    ],
+    price: 70.0,
+    description: "Meyve aromalı maden suyu",
   },
   {
-    id: 'prod-ecobery',
-    name: 'Ecobery',
+    id: 'prod-cola',
+    name: "Cola",
     category: 'Soğuk İçecekler',
-    price: 190,
-    description: 'Orman meyveli ferahlatıcı özel frozen kokteyl',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-tek', name: 'Tek', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
+    price: 90.0,
+    description: "Kutu soğuk kola",
   },
   {
-    id: 'prod-ecolime',
-    name: 'Ecolime',
+    id: 'prod-kokteyl',
+    name: "Kokteyl",
     category: 'Soğuk İçecekler',
-    price: 190,
-    description: 'Misket limon aromalı serinletici özel kokteyl',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-tek', name: 'Tek', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
+    price: 250.0,
+    description: "Özel karışım alkolsüz kokteyl",
   },
   {
-    id: 'prod-eco-blueline-redline',
-    name: 'Eco Blueline / Redline',
-    category: 'Soğuk İçecekler',
-    price: 190,
-    description: 'Mavi ve kırmızı meyve özlü serinletici egzotik kokteyl',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-tek', name: 'Tek', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'prod-green-world',
-    name: 'Green World',
-    category: 'Soğuk İçecekler',
-    price: 190,
-    description: 'Yeşil elma ve nane özlü özel ferahlatıcı kokteyl',
-    badge: 'Yeni',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-tek', name: 'Tek', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
-  },
-  {
-    id: 'prod-ecomeco-special',
-    name: 'Ecomeco Special',
-    category: 'Soğuk İçecekler',
-    price: 210,
-    description: 'Eco Coffee özel reçeteli dev serinletici kokteyl',
-    optionGroups: [
-      {
-        id: 'opt-size',
-        name: 'Boyut Seçimi',
-        selectionType: 'single',
-        required: true,
-        options: [
-          { id: 'opt-tek', name: 'Tek', priceDelta: 0, isDefault: true },
-          { id: 'opt-buyuk', name: 'Büyük', priceDelta: 20, isDefault: false },
-        ],
-      },
-    ],
-  },
-
-  // ================= İMZA CHEESECAKELER & PASTALAR =================
-  {
-    id: 'prod-san-sebastian',
-    name: 'San Sebastian Cheesecake',
-    category: 'Tatlılar',
-    price: 200,
-    description: 'Üzerine sıcak erimiş Belçika çikolatası dökülen, içi akışkan nefis San Sebastian cheesecake',
-    badge: 'Çok Satan',
-  },
-  {
-    id: 'prod-fistikli-san-sebastian',
-    name: 'Fıstıklı San Sebastian',
-    category: 'Tatlılar',
-    price: 220,
-    description: 'Antep fıstığı dolgulu ve parçacıklı özel San Sebastian cheesecake',
-  },
-  {
-    id: 'prod-bombella-special',
-    name: 'Bombella Special',
-    category: 'Tatlılar',
-    price: 250,
-    description: 'Çikolata bombası ve özel krema dolgulu imza tatlı',
-    badge: 'Çok Satan',
-  },
-  {
-    id: 'prod-american-cookie',
-    name: 'American Cookie',
-    category: 'Tatlılar',
-    price: 220,
-    description: 'Bol çikolatalı ve günlük taze Amerikan kurabiyesi',
-  },
-  {
-    id: 'prod-belcika-cikolatali-pasta',
-    name: 'Belçika Çikolatalı Pasta',
-    category: 'Tatlılar',
-    price: 180,
-    description: 'Orijinal Belçika çikolatalı yoğun kıvamlı dilim pasta',
-  },
-  {
-    id: 'prod-lotus-biscoff-pasta',
-    name: 'Lotus Biscoff Pasta',
-    category: 'Tatlılar',
-    price: 190,
-    description: 'Karamelize Lotus bisküvi kremalı enfes dilim pasta',
-  },
-  {
-    id: 'prod-eco-vista-frambuazli-pasta',
-    name: 'Eco Vista Frambuazlı Pasta',
-    category: 'Tatlılar',
-    price: 200,
-    description: 'Taze frambuaz taneli ve hafif kremalı gurme dilim pasta',
-  },
-  {
-    id: 'prod-cilek-cup-dessert',
-    name: 'Çilek Cup Dessert',
-    category: 'Tatlılar',
-    price: 160,
-    description: 'Taze çilek taneleri, krema ve kıtır bisküvili bardak tatlısı',
-  },
-  {
-    id: 'prod-fistik-cup-dessert',
-    name: 'Fıstık Cup Dessert',
-    category: 'Tatlılar',
-    price: 170,
-    description: 'Antep fıstığı kremalı ve kıtır bisküvili bardak tatlısı',
-  },
-
-  // ================= EKSTRALAR & SOSLAR =================
-  {
-    id: 'prod-erimis-belcika-cikolatasi-sosu',
-    name: 'Erimiş Belçika Çikolatası Sosu',
+    id: 'prod-sucuklu-tost',
+    name: "Sucuklu Tost",
     category: 'Atıştırmalıklar',
-    price: 50,
-    description: 'Tatlı ve pastalarınız için sıcak erimiş Belçika çikolatası ekstra sos',
+    price: 100.0,
+    description: "Dana sucuklu sıcak çıtır tost",
   },
   {
-    id: 'prod-eco-special-cekirdek',
-    name: 'Eco Special Nitelikli Kahve Çekirdeği',
+    id: 'prod-kasarli-tost',
+    name: "Kaşarlı Tost",
     category: 'Atıştırmalıklar',
-    price: 250,
-    description: 'Taze kavrulmuş nitelikli öğütülmemiş kahve çekirdekleri (250g)',
-    badge: 'Yeni',
+    price: 110.0,
+    description: "Eriyen taze kaşar peynirli tost",
+  },
+  {
+    id: 'prod-karisik-tost',
+    name: "Karışık Tost",
+    category: 'Atıştırmalıklar',
+    price: 120.0,
+    description: "Dana sucuk ve bol kaşarlı tost",
+  },
+  {
+    id: 'prod-sanayi-tostu',
+    name: "Sanayi Tostu",
+    category: 'Atıştırmalıklar',
+    price: 130.0,
+    description: "Bol malzemeli çıtır sanayi tostu",
+  },
+  {
+    id: 'prod-kofte-burger',
+    name: "Köfte Burger",
+    category: 'Atıştırmalıklar',
+    price: 330.0,
+    description: "Özel dana köfteli nefis burger",
+  },
+  {
+    id: 'prod-tavuk-burger',
+    name: "Tavuk Burger",
+    category: 'Atıştırmalıklar',
+    price: 250.0,
+    description: "Çıtır tavuklu lezzetli burger",
+  },
+  {
+    id: 'prod-sade-kremali-makarna',
+    name: "Sade Kremal Makarna ı",
+    category: 'Atıştırmalıklar',
+    price: 180.0,
+    description: "Sade Kremalı Makarna",
+  },
+  {
+    id: 'prod-mantarli-makarna',
+    name: "Mantarlı Makarna",
+    category: 'Atıştırmalıklar',
+    price: 200.0,
+    description: "Kremalı taze mantarlı makarna",
+  },
+  {
+    id: 'prod-tavuklu-makarna',
+    name: "Tavuklu Makarna",
+    category: 'Atıştırmalıklar',
+    price: 230.0,
+    description: "Kremalı tavuk parçalı nefis makarna",
+  },
+  {
+    id: 'prod-patso',
+    name: "Patso",
+    category: 'Atıştırmalıklar',
+    price: 110.0,
+    description: "Patates: 110₺ | Ekstralar: Sosis (+25₺), Kaşar (+25₺)",
+    optionGroups: [
+      {
+            "id": "opt-patso-extras",
+            "name": "Ekstralar",
+            "selectionType": "multiple",
+            "required": false,
+            "options": [
+                  {
+                        "id": "opt-extra-sosis",
+                        "name": "Sosis",
+                        "priceDelta": 25,
+                        "isDefault": false
+                  },
+                  {
+                        "id": "opt-extra-kasar",
+                        "name": "Kaşar",
+                        "priceDelta": 25,
+                        "isDefault": false
+                  }
+            ]
+      }
+],
+  },
+  {
+    id: 'prod-sosisli',
+    name: "Sosisli",
+    category: 'Atıştırmalıklar',
+    price: 120.0,
+    description: "Sosisli sandviç ketçap mayonez ile",
+  },
+  {
+    id: 'prod-kofte-ekmek-dana-kofte',
+    name: "Köfte Ekmek (Dana Köfte)",
+    category: 'Atıştırmalıklar',
+    price: 200.0,
+    description: "Dana Köfte: 200₺",
+  },
+  {
+    id: 'prod-kofte-ekmek-menu',
+    name: "Köfte Ekmek Menü (patates / ayran)",
+    category: 'Atıştırmalıklar',
+    price: 270.0,
+    description: "Köfte ekmek, patates kızartması ve ayran menüsü",
+  },
+  {
+    id: 'prod-patates-kizartmasi',
+    name: "Patates Kızartması (ketçap/mayonez)",
+    category: 'Atıştırmalıklar',
+    price: 120.0,
+    description: "Patates (ketçap/mayonez): 120₺",
+  },
+  {
+    id: 'prod-combo-tabagi',
+    name: "Combo Tabağı (patates / sosis / salam / soğan halkası / nugget / cola & ayran)",
+    category: 'Atıştırmalıklar',
+    price: 300.0,
+    description: "Patates, sosis, salam, soğan halkası, nugget, cola & ayran",
+  },
+  {
+    id: 'prod-sucuk-ekmek-dana-sucuk',
+    name: "Sucuk Ekmek (Dana Sucuk)",
+    category: 'Atıştırmalıklar',
+    price: 180.0,
+    description: "Dana Sucuk: 180₺",
+  },
+  {
+    id: 'prod-sucuk-ekmek-menu',
+    name: "Sucuk Ekmek Menü (patates / ayran)",
+    category: 'Atıştırmalıklar',
+    price: 250.0,
+    description: "Dana sucuk ekmek, patates kızartması ve ayran menüsü",
+  },
+  {
+    id: 'prod-kumru',
+    name: "Kumru (Salam, sosis, kaşar, turşu)",
+    category: 'Atıştırmalıklar',
+    price: 150.0,
+    description: "Salam, sosis, kaşar, turşu: 150₺",
+  },
+  {
+    id: 'prod-kule-waffle',
+    name: "Kule Waffle",
+    category: 'Tatlılar',
+    price: 300.0,
+    description: "Kat kat çikolatalı ve meyveli kule waffle",
+  },
+  {
+    id: 'prod-tabak-waffle',
+    name: "Tabak Waffle",
+    category: 'Tatlılar',
+    price: 250.0,
+    description: "Tabakta bol çikolata ve meyveli klasik waffle",
+  },
+  {
+    id: 'prod-bardak-waffle',
+    name: "Bardak Waffle",
+    category: 'Tatlılar',
+    price: 200.0,
+    description: "Bardakta pratik ve lezzetli waffle lokmaları",
   },
 ]
-

@@ -1,8 +1,8 @@
 import { memo, useCallback, useRef, useState } from 'react'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Sun } from 'lucide-react'
 import { ProductExplorer } from './ProductExplorer'
 import { CartPanel } from './CartPanel'
-import type { CartItem, OrderTotals, Product, ItemDiscount } from '../types'
+import type { CartItem, OrderTotals, Product, ItemDiscount, PartialPayment } from '../types'
 
 interface TableOrderViewProps {
   tableName: string
@@ -11,6 +11,7 @@ interface TableOrderViewProps {
   note: string
   customerName: string
   totals: OrderTotals
+  payments?: PartialPayment[]
   products: Product[]
   onAddProduct: (id: string) => void
   onUpdateQuantity: (id: string, change: number) => void
@@ -28,6 +29,8 @@ interface TableOrderViewProps {
   onEditProduct?: (product: Product) => void
   onViewDetail?: (product: Product) => void
   onDeleteProduct?: (id: string) => void
+  isDayOpen?: boolean
+  onOpenDayModal?: () => void
 }
 
 export const TableOrderView = memo(function TableOrderView({
@@ -37,6 +40,7 @@ export const TableOrderView = memo(function TableOrderView({
   note,
   customerName,
   totals,
+  payments,
   products,
   onAddProduct,
   onUpdateQuantity,
@@ -54,6 +58,8 @@ export const TableOrderView = memo(function TableOrderView({
   onEditProduct,
   onViewDetail,
   onDeleteProduct,
+  isDayOpen = true,
+  onOpenDayModal,
 }: TableOrderViewProps) {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('Tümü')
@@ -65,15 +71,33 @@ export const TableOrderView = memo(function TableOrderView({
 
   return (
     <div className="table-order-view">
-      <div className="table-order-header">
-        <button type="button" className="table-order-back" onClick={handleBack}>
-          <ArrowLeft size={18} strokeWidth={2.2} />
-          <span>Masalara Dön</span>
-        </button>
-        <div className="table-order-title">
-          <span className="table-order-badge">{tableName}</span>
-          <span className="table-order-subtitle">Sipariş Oluştur</span>
+      <div className="table-order-header justify-between">
+        <div className="flex items-center gap-4">
+          <button type="button" className="table-order-back" onClick={handleBack}>
+            <ArrowLeft size={18} strokeWidth={2.2} />
+            <span>Masalara Dön</span>
+          </button>
+          <div className="table-order-title">
+            <span className="table-order-badge">{tableName}</span>
+            <span className="table-order-subtitle">Sipariş Oluştur</span>
+          </div>
         </div>
+
+        {!isDayOpen && (
+          <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-extrabold">
+            <span>Sipariş almak için önce günü açın</span>
+            {onOpenDayModal && (
+              <button
+                type="button"
+                onClick={onOpenDayModal}
+                className="px-2.5 py-1 rounded-lg bg-[#8a6d57] hover:bg-[#3b291f] text-white text-[11px] font-extrabold inline-flex items-center gap-1 transition-colors"
+              >
+                <Sun size={12} />
+                <span>Günü Aç</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <section className="pos-layout table-order-body" aria-label={`${tableName} sipariş ekranı`}>
@@ -108,6 +132,7 @@ export const TableOrderView = memo(function TableOrderView({
           onApplyItemDiscount={onApplyItemDiscount}
           orderNumber={tableName}
           totals={totals}
+          payments={payments}
         />
       </section>
     </div>

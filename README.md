@@ -1,4 +1,4 @@
-# Eco Coffee POS - Kasa & Restoran Otomasyon Sistemi
+# LEMOON KAFE POS - Kasa & Restoran Otomasyon Sistemi
 
 Modern, hızlı ve dokunmatik ekran dostu cafe/restoran kasa arayüzü ve masa yönetim sistemi.
 

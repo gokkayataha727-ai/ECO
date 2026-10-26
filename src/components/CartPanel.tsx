@@ -1,9 +1,8 @@
 import { memo } from 'react'
-import { ClipboardList, Coffee, CreditCard, Keyboard, User } from 'lucide-react'
-import { formatCurrency } from '../lib/format'
+import { ClipboardList, Coffee, CreditCard, User } from 'lucide-react'
+import { derivePaymentState, formatCurrency } from '../lib/format'
 import { CartItemRow } from './cart/CartItemRow'
-import { useVirtualKeyboard } from '../context/VirtualKeyboardContext'
-import type { CartItem, OrderTotals, ItemDiscount } from '../types'
+import type { CartItem, OrderTotals, ItemDiscount, PartialPayment } from '../types'
 
 interface CartPanelProps {
   cart: CartItem[]
@@ -22,6 +21,7 @@ interface CartPanelProps {
   onApplyItemDiscount: (id: string, discount?: ItemDiscount) => void
   orderNumber: string
   totals: OrderTotals
+  payments?: PartialPayment[]
 }
 
 export const CartPanel = memo(function CartPanel({
@@ -41,27 +41,10 @@ export const CartPanel = memo(function CartPanel({
   onApplyItemDiscount,
   orderNumber,
   totals,
+  payments = [],
 }: CartPanelProps) {
-  const { openKeyboard } = useVirtualKeyboard()
   const cartIsEmpty = cart.length === 0
-
-  const handleOpenCustomerNameKb = () => {
-    openKeyboard({
-      value: customerName,
-      onChange: onCustomerNameChange,
-      mode: 'text',
-      title: 'Müşteri Adı Girin',
-    })
-  }
-
-  const handleOpenNoteKb = () => {
-    openKeyboard({
-      value: note,
-      onChange: onNoteChange,
-      mode: 'text',
-      title: 'Sipariş Notu Girin',
-    })
-  }
+  const { paidTotal, remaining } = derivePaymentState(totals.total, payments)
 
   return (
     <aside className="cart-panel" aria-label="Aktif sipariş sepeti">
@@ -106,60 +89,20 @@ export const CartPanel = memo(function CartPanel({
                 className="customer-name-input"
                 value={customerName}
                 onChange={(event) => onCustomerNameChange(event.target.value)}
-                onFocus={handleOpenCustomerNameKb}
-                onClick={handleOpenCustomerNameKb}
-                onTouchEnd={handleOpenCustomerNameKb}
                 placeholder="Müşteri Adı (örn. Ahmet Bey, Masa'daki kız)"
                 maxLength={40}
                 aria-label="Müşteri adı"
               />
             </div>
-            <button
-              type="button"
-              className="keyboard-trigger-btn cart-kb-btn"
-              onClick={(e) => {
-                e.stopPropagation()
-                e.preventDefault()
-                handleOpenCustomerNameKb()
-              }}
-              onTouchEnd={(e) => {
-                e.stopPropagation()
-                e.preventDefault()
-                handleOpenCustomerNameKb()
-              }}
-              title="Sanal Klavye Aç"
-            >
-              <Keyboard size={15} />
-            </button>
           </div>
           <div className="note-area-wrap">
             <textarea
               className="note-area"
               value={note}
               onChange={(event) => onNoteChange(event.target.value)}
-              onFocus={handleOpenNoteKb}
-              onClick={handleOpenNoteKb}
-              onTouchEnd={handleOpenNoteKb}
               placeholder="Sipariş Notu (örn. yulaf sütü, şekersiz)"
               aria-label="Sipariş notu"
             />
-            <button
-              type="button"
-              className="keyboard-trigger-btn note-kb-btn"
-              onClick={(e) => {
-                e.stopPropagation()
-                e.preventDefault()
-                handleOpenNoteKb()
-              }}
-              onTouchEnd={(e) => {
-                e.stopPropagation()
-                e.preventDefault()
-                handleOpenNoteKb()
-              }}
-              title="Sanal Klavye Aç"
-            >
-              <Keyboard size={14} />
-            </button>
           </div>
         </div>
       </div>
@@ -175,7 +118,16 @@ export const CartPanel = memo(function CartPanel({
           <div className="total-row"><span>Ara Toplam</span><strong>{formatCurrency(totals.subtotal)}</strong></div>
           <div className="total-row discount"><span>İndirim</span><strong>-{formatCurrency(totals.discount)}</strong></div>
           <div className="total-row"><span>KDV dahil</span><strong>%10</strong></div>
-          <div className="grand-total"><span>Genel Toplam</span><strong>{formatCurrency(totals.total)}</strong></div>
+          {paidTotal > 0 && (
+            <>
+              <div className="total-row"><span>Genel Toplam</span><strong>{formatCurrency(totals.total)}</strong></div>
+              <div className="total-row discount"><span>Ödenen</span><strong>-{formatCurrency(paidTotal)}</strong></div>
+              <div className="grand-total"><span>Kalan Tutar</span><strong>{formatCurrency(remaining)}</strong></div>
+            </>
+          )}
+          {paidTotal === 0 && (
+            <div className="grand-total"><span>Genel Toplam</span><strong>{formatCurrency(totals.total)}</strong></div>
+          )}
         </div>
         <div className="cart-actions">
           <button type="button" className="pay-button pay-button--complete" disabled={cartIsEmpty} onClick={onCompleteOrder}>Siparişi Tamamla</button>

@@ -82,10 +82,10 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
 
       <div className="splash-content">
         <div className="splash-logo">
-          <AppLogo className="w-56 h-56 object-contain" alt="Eco Coffee Logo" />
+          <AppLogo className="w-56 h-56 object-contain" alt="LEMOON KAFE Logo" />
         </div>
         <h1 className={`splash-title ${phase !== 'logo' ? 'splash-title-visible' : ''}`}>
-          Eco Coffee Yönetim Sistemine Hoşgeldiniz
+          LEMOON KAFE Yönetim Sistemine Hoşgeldiniz
         </h1>
       </div>
     </div>

@@ -60,7 +60,7 @@ function createMainWindow() {
     autoHideMenuBar: true,
     frame: false,
     resizable: false,
-    title: 'ECO COFFEE - Kasa & Restoran Otomasyonu',
+    title: 'LEMOON KAFE - Kasa & Restoran Otomasyonu',
     icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
@@ -115,7 +115,7 @@ function openCustomerDisplay() {
     autoHideMenuBar: true,
     frame: false,
     resizable: false,
-    title: 'ECO COFFEE - Müşteri Ekranı',
+    title: 'LEMOON KAFE - Müşteri Ekranı',
     icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),

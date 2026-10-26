@@ -11,13 +11,13 @@ from datetime import datetime, timedelta, timezone
 from typing import List
 import math
 
-from database import get_db, engine, Base
+from database import get_db, engine, Base, DB_PATH
 import models
 import schemas
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="ECO Coffee API")
+app = FastAPI(title="LEMOON KAFE API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -84,8 +84,6 @@ def create_product(
     db_product = None
     if id:
         db_product = db.query(models.Product).filter(models.Product.id == id).first()
-    if not db_product:
-        db_product = db.query(models.Product).filter(models.Product.name == name).first()
 
     if db_product:
         db_product.name = name
@@ -293,10 +291,10 @@ if __name__ == "__main__":
     host = "0.0.0.0" if is_production else "127.0.0.1"
     reload_enabled = not is_production
     
-    print(f"☕ ECO COFFEE POS Server")
+    print(f"☕ LEMOON KAFE POS Server")
     print(f"   Mode: {'PRODUCTION' if is_production else 'DEVELOPMENT'}")
     print(f"   URL: http://localhost:8000")
-    print(f"   Database: {os.path.abspath('eco_coffee.db')}")
+    print(f"   Database: {DB_PATH}")
     
     uvicorn.run("main:app", host=host, port=8000, reload=reload_enabled)
 

@@ -23,12 +23,16 @@ function isSameDay(dateStr: string, today: Date): boolean {
 
 export function useHomeStats(
   completedOrders: CompletedOrder[],
-  tables: Table[]
+  tables: Table[],
+  openBusinessDayId?: string | null,
 ): HomeStats {
   return useMemo(() => {
     const today = new Date()
 
-    const todayOrders = completedOrders.filter((o) => isSameDay(o.date, today))
+    const validOrders = completedOrders.filter((o) => !o.cancelled)
+    const todayOrders = openBusinessDayId
+      ? validOrders.filter((o) => o.businessDayId === openBusinessDayId)
+      : validOrders.filter((o) => isSameDay(o.date, today))
     const todayRevenue = todayOrders.reduce((sum, o) => sum + o.totals.total, 0)
     const todayOrderCount = todayOrders.length
     const averageBasket = todayOrderCount > 0 ? todayRevenue / todayOrderCount : 0
@@ -45,5 +49,5 @@ export function useHomeStats(
       occupiedTableCount,
       totalTableCount: tables.length,
     }
-  }, [completedOrders, tables])
+  }, [completedOrders, tables, openBusinessDayId])
 }

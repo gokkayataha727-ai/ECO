@@ -5,7 +5,7 @@ interface AppLogoProps {
   alt?: string
 }
 
-export function AppLogo({ className = "w-10 h-10 object-contain", alt = "Eco Coffee Logo" }: AppLogoProps) {
+export function AppLogo({ className = "w-10 h-10 object-contain", alt = "LEMOON KAFE Logo" }: AppLogoProps) {
   const [logoSrc, setLogoSrc] = useState<string>(() => {
     return localStorage.getItem('customAppLogo') || '/logo.png'
   })

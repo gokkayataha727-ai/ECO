@@ -33,7 +33,7 @@ jobs:
       - name: Upload Executable Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ECO-Coffee-POS-Windows-Installer
+          name: LEMOON-KAFE-POS-Windows-Installer
           path: release/*.exe
 
       - name: Create GitHub Release
@@ -41,9 +41,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: release/*.exe
-          name: Eco Coffee POS ${{ github.ref_name }}
+          name: LEMOON KAFE POS ${{ github.ref_name }}
           body: |
-            ## Eco Coffee POS Windows Setup (.exe)
+            ## LEMOON KAFE POS Windows Setup (.exe)
             
             1. `.exe` dosyasını indirin.
             2. POS bilgisayarınızda çift tıklayarak kurun.

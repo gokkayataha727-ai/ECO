@@ -9,19 +9,25 @@ import {
   Coffee,
   MapPin,
   Clock,
+  Sun,
+  Moon,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { AppLogo } from './AppLogo'
 import { useHomeStats } from '../hooks/useHomeStats'
 import { formatCurrency, paymentMethodLabel } from '../lib/format'
-import type { CompletedOrder, Table } from '../types'
+import type { AppSettings, BusinessDay, CompletedOrder, Table } from '../types'
 
 interface HomePageProps {
   completedOrders: CompletedOrder[]
   tables: Table[]
+  openBusinessDay?: BusinessDay | null
+  onOpenDayModal?: () => void
+  onCloseDayModal?: () => void
   onViewChange: (view: 'tables' | 'pos' | 'home') => void
   onOpenSummary: () => void
   onOpenProducts: () => void
+  settings?: AppSettings
 }
 
 const formatDateTime = (date: Date) => {
@@ -51,11 +57,15 @@ const formatTimeAgo = (dateStr: string) => {
 export function HomePage({
   completedOrders,
   tables,
+  openBusinessDay,
+  onOpenDayModal,
+  onCloseDayModal,
   onViewChange,
   onOpenSummary,
   onOpenProducts,
+  settings,
 }: HomePageProps) {
-  const stats = useHomeStats(completedOrders, tables)
+  const stats = useHomeStats(completedOrders, tables, openBusinessDay?.id)
   const [now, setNow] = useState(() => new Date())
 
   useEffect(() => {
@@ -63,7 +73,7 @@ export function HomePage({
     return () => window.clearInterval(timer)
   }, [])
 
-  const recentOrders = completedOrders.slice(0, 5)
+  const recentOrders = completedOrders.filter((o) => !o.cancelled).slice(0, 5)
 
   const kpis = [
     {
@@ -90,8 +100,8 @@ export function HomePage({
     {
       icon: CreditCard,
       title: 'Kasa',
-      desc: 'Yeni satış oluştur',
-      action: () => onViewChange('pos'),
+      desc: 'Masa seç, sipariş al',
+      action: () => onViewChange('tables'),
     },
     {
       icon: LayoutGrid,
@@ -117,12 +127,12 @@ export function HomePage({
           </div>
           <div className="welcome-info">
             <h1 className="welcome-title">
-              Hoş geldin, <span>ECO</span>
+              Hoş geldin, <span>{settings?.cashierName || 'LEMOON'}</span>
             </h1>
             <div className="welcome-meta">
               <span className="welcome-location">
                 <MapPin size={13} />
-                Eco Coffee · Nurdağı
+                {settings?.location || 'LEMOON KAFE · SIMAV'}
               </span>
               <span className="welcome-date">
                 <Clock size={13} />
@@ -131,10 +141,33 @@ export function HomePage({
             </div>
           </div>
         </div>
-        <div className="welcome-right">
-          <div className="status-pill">
-            <span className="live-dot" /> Vardiya Açık
-          </div>
+        <div className="welcome-right flex items-center gap-2">
+          {openBusinessDay ? (
+            <>
+              <div className="status-pill">
+                <span className="live-dot" /> Gün Açık
+              </div>
+              {onCloseDayModal && (
+                <button
+                  type="button"
+                  onClick={onCloseDayModal}
+                  className="px-3 py-1.5 rounded-full text-[11px] font-extrabold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 inline-flex items-center gap-1 transition-colors"
+                >
+                  <Moon size={12} />
+                  <span>Günü Kapat</span>
+                </button>
+              )}
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={onOpenDayModal}
+              className="status-pill status-pill--closed inline-flex items-center gap-1.5 cursor-pointer"
+            >
+              <span className="live-dot live-dot--closed" /> Gün Kapalı · Günü Aç
+              <Sun size={12} />
+            </button>
+          )}
         </div>
       </div>
 

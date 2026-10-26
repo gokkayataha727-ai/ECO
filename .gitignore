@@ -25,7 +25,12 @@ dist-ssr
 
 # Backend
 backend/venv
-backend/__pycache__
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
 
 # Electron
 release/

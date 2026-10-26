@@ -27,7 +27,7 @@ export function CustomerDisplay() {
     subtotal: 0,
     discount: 0,
     total: 0,
-    storeName: 'ECO COFFEE',
+    storeName: 'LEMOON KAFE',
     storeSub: 'Kahvenin iyi hali',
   })
   const [currentTime, setCurrentTime] = useState(new Date())

@@ -1,8 +1,7 @@
-import { CakeSlice, Coffee, Croissant, CupSoda, Edit3, Eye, Keyboard as KeyboardIcon, Leaf, MoreVertical, Plus, Search, Sparkles, Trash2 } from 'lucide-react'
+import { CakeSlice, Coffee, Croissant, CupSoda, Edit3, Eye, Leaf, MoreVertical, Plus, Search, Sparkles, Trash2 } from 'lucide-react'
 import { memo, useMemo, useState, useEffect, useRef } from 'react'
 import { categories } from '../data/products'
 import { formatCurrency } from '../lib/format'
-import { useVirtualKeyboard } from '../context/VirtualKeyboardContext'
 import type { Product, ProductCategory } from '../types'
 
 interface ProductExplorerProps {
@@ -219,22 +218,11 @@ export const ProductExplorer = memo(function ProductExplorer({
   onViewDetail,
   onDeleteProduct,
 }: ProductExplorerProps) {
-  const { openKeyboard } = useVirtualKeyboard()
-
-  const handleOpenSearchKeyboard = () => {
-    openKeyboard({
-      value: search,
-      onChange: onSearchChange,
-      mode: 'text',
-      title: 'Ürün Ara',
-    })
-  }
-
   const filteredProducts = useMemo(() => {
     const normalizedSearch = search.trim().toLocaleLowerCase('tr-TR')
     return products.filter((product) => {
       const inCategory = category === 'Tümü' || product.category === category
-      const inSearch = !normalizedSearch || `${product.name} ${product.category}`.toLocaleLowerCase('tr-TR').includes(normalizedSearch)
+      const inSearch = !normalizedSearch || `${product.name} ${product.category} ${product.description || ''}`.toLocaleLowerCase('tr-TR').includes(normalizedSearch)
       return inCategory && inSearch
     })
   }, [products, category, search])
@@ -268,30 +256,10 @@ export const ProductExplorer = memo(function ProductExplorer({
             ref={searchRef}
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
-            onFocus={handleOpenSearchKeyboard}
-            onClick={handleOpenSearchKeyboard}
-            onTouchEnd={handleOpenSearchKeyboard}
             placeholder="Ürün ara..."
           />
         </div>
         <div className="search-box-right">
-          <button
-            type="button"
-            className="keyboard-trigger-btn"
-            onClick={(e) => {
-              e.stopPropagation()
-              e.preventDefault()
-              handleOpenSearchKeyboard()
-            }}
-            onTouchEnd={(e) => {
-              e.stopPropagation()
-              e.preventDefault()
-              handleOpenSearchKeyboard()
-            }}
-            title="Sanal Klavye Aç"
-          >
-            <KeyboardIcon size={16} />
-          </button>
           <span className="shortcut">F2</span>
         </div>
       </label>

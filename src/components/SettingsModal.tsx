@@ -13,9 +13,12 @@ import {
   ImageIcon,
   RotateCcw,
   Download,
+  Landmark,
+  CreditCard,
+  AlertCircle,
 } from 'lucide-react'
-import { useVirtualKeyboard } from '../context/VirtualKeyboardContext'
 import type { AppSettings } from '../types/settings'
+import { formatIban, validateTurkishIban } from '../lib/format'
 
 interface SettingsModalProps {
   isOpen: boolean
@@ -40,7 +43,6 @@ export function SettingsModal({
   onOpenLogoSettings,
   onResetData,
 }: SettingsModalProps) {
-  const { openKeyboard } = useVirtualKeyboard()
   const [activeTab, setActiveTab] = useState<TabType>('appearance')
   const [formData, setFormData] = useState<AppSettings>(settings)
   const [showResetConfirm, setShowResetConfirm] = useState(false)
@@ -57,7 +59,7 @@ export function SettingsModal({
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(formData, null, 2))
     const downloadAnchor = document.createElement('a')
     downloadAnchor.setAttribute("href", dataStr)
-    downloadAnchor.setAttribute("download", `eco_coffee_ayarlar_${new Date().toISOString().slice(0, 10)}.json`)
+    downloadAnchor.setAttribute("download", `lemoon_kafe_ayarlar_${new Date().toISOString().slice(0, 10)}.json`)
     document.body.appendChild(downloadAnchor)
     downloadAnchor.click()
     downloadAnchor.remove()
@@ -253,26 +255,8 @@ export function SettingsModal({
                     type="text"
                     value={formData.storeName}
                     onChange={(e) => handleChange('storeName', e.target.value)}
-                    onFocus={() => openKeyboard({
-                      value: formData.storeName,
-                      onChange: (val) => handleChange('storeName', val),
-                      mode: 'text',
-                      title: 'İşletme Adı Girin',
-                    })}
-                    onClick={() => openKeyboard({
-                      value: formData.storeName,
-                      onChange: (val) => handleChange('storeName', val),
-                      mode: 'text',
-                      title: 'İşletme Adı Girin',
-                    })}
-                    onTouchEnd={() => openKeyboard({
-                      value: formData.storeName,
-                      onChange: (val) => handleChange('storeName', val),
-                      mode: 'text',
-                      title: 'İşletme Adı Girin',
-                    })}
                     className="w-full px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
-                    placeholder="Örn: Eco Coffee"
+                    placeholder="Örn: LEMOON KAFE"
                   />
                 </div>
 
@@ -284,24 +268,6 @@ export function SettingsModal({
                     type="text"
                     value={formData.storeSub}
                     onChange={(e) => handleChange('storeSub', e.target.value)}
-                    onFocus={() => openKeyboard({
-                      value: formData.storeSub,
-                      onChange: (val) => handleChange('storeSub', val),
-                      mode: 'text',
-                      title: 'Alt Başlık Girin',
-                    })}
-                    onClick={() => openKeyboard({
-                      value: formData.storeSub,
-                      onChange: (val) => handleChange('storeSub', val),
-                      mode: 'text',
-                      title: 'Alt Başlık Girin',
-                    })}
-                    onTouchEnd={() => openKeyboard({
-                      value: formData.storeSub,
-                      onChange: (val) => handleChange('storeSub', val),
-                      mode: 'text',
-                      title: 'Alt Başlık Girin',
-                    })}
                     className="w-full px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
                     placeholder="Örn: Kahvenin iyi hali"
                   />
@@ -315,26 +281,8 @@ export function SettingsModal({
                     type="text"
                     value={formData.location}
                     onChange={(e) => handleChange('location', e.target.value)}
-                    onFocus={() => openKeyboard({
-                      value: formData.location,
-                      onChange: (val) => handleChange('location', val),
-                      mode: 'text',
-                      title: 'Şube / Konum Girin',
-                    })}
-                    onClick={() => openKeyboard({
-                      value: formData.location,
-                      onChange: (val) => handleChange('location', val),
-                      mode: 'text',
-                      title: 'Şube / Konum Girin',
-                    })}
-                    onTouchEnd={() => openKeyboard({
-                      value: formData.location,
-                      onChange: (val) => handleChange('location', val),
-                      mode: 'text',
-                      title: 'Şube / Konum Girin',
-                    })}
                     className="w-full px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
-                    placeholder="Örn: Eco Coffee · Nurdağı"
+                    placeholder="Örn: LEMOON KAFE · SIMAV"
                   />
                 </div>
 
@@ -346,27 +294,98 @@ export function SettingsModal({
                     type="text"
                     value={formData.cashierName}
                     onChange={(e) => handleChange('cashierName', e.target.value)}
-                    onFocus={() => openKeyboard({
-                      value: formData.cashierName,
-                      onChange: (val) => handleChange('cashierName', val),
-                      mode: 'text',
-                      title: 'Kasiyer İsmi Girin',
-                    })}
-                    onClick={() => openKeyboard({
-                      value: formData.cashierName,
-                      onChange: (val) => handleChange('cashierName', val),
-                      mode: 'text',
-                      title: 'Kasiyer İsmi Girin',
-                    })}
-                    onTouchEnd={() => openKeyboard({
-                      value: formData.cashierName,
-                      onChange: (val) => handleChange('cashierName', val),
-                      mode: 'text',
-                      title: 'Kasiyer İsmi Girin',
-                    })}
                     className="w-full px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
-                    placeholder="Örn: ECO"
+                    placeholder="Örn: LEMOON"
                   />
+                </div>
+              </div>
+
+              {/* POS Z Raporu Ayarları */}
+              <div className="pt-5 border-t border-stone-200 dark:border-stone-800">
+                <div className="flex items-center gap-2 mb-2">
+                  <CreditCard size={16} className="text-amber-700 dark:text-amber-400" />
+                  <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100">
+                    POS Cihazı & Z Raporu Ayarları
+                  </h3>
+                </div>
+                <div className="max-w-xs">
+                  <label className="block text-xs font-bold text-stone-800 dark:text-stone-200 mb-1.5">
+                    POS Z raporu saati (HH:mm)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.posZCutoffTime ?? '23:57'}
+                    onChange={(e) => handleChange('posZCutoffTime', e.target.value.trim())}
+                    className="w-full px-3.5 py-2.5 text-xs font-mono font-bold rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
+                    placeholder="23:57"
+                    maxLength={5}
+                  />
+                  {formData.posZCutoffTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(formData.posZCutoffTime) && (
+                    <p className="mt-1 flex items-center gap-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">
+                      <AlertCircle size={13} />
+                      Geçerli bir saat formatı girin (Örn: 23:57)
+                    </p>
+                  )}
+                  <p className="text-[11px] text-stone-500 dark:text-stone-400 mt-1 leading-relaxed">
+                    Fiziksel POS terminalinizin otomatik Z raporu çıkardığı saat. Bu saatten sonraki kart ödemeleri yarına devreder. Varsayılan: 23:57
+                  </p>
+                </div>
+              </div>
+
+              {/* IBAN Bilgileri */}
+              <div className="pt-5 border-t border-stone-200 dark:border-stone-800">
+                <div className="flex items-center gap-2 mb-3">
+                  <Landmark size={16} className="text-amber-700 dark:text-amber-400" />
+                  <h3 className="text-sm font-bold text-stone-900 dark:text-stone-100">
+                    IBAN Bilgileri (Havale / EFT)
+                  </h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-stone-800 dark:text-stone-200 mb-1.5">
+                      Banka Adı
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.bankName || ''}
+                      onChange={(e) => handleChange('bankName', e.target.value)}
+                      className="w-full px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
+                      placeholder="Örn: Ziraat Bankası"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-stone-800 dark:text-stone-200 mb-1.5">
+                      Hesap Sahibi
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.accountHolder || ''}
+                      onChange={(e) => handleChange('accountHolder', e.target.value)}
+                      className="w-full px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
+                      placeholder="Örn: LEMOON KAFE Gıda Ltd. Şti."
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-bold text-stone-800 dark:text-stone-200 mb-1.5">
+                      IBAN Numarası
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.iban || ''}
+                      onChange={(e) => handleChange('iban', formatIban(e.target.value))}
+                      className="w-full px-3.5 py-2.5 text-xs font-mono font-bold tracking-wider rounded-xl border border-stone-300 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-100 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
+                      placeholder="TR00 0000 0000 0000 0000 0000 00"
+                      maxLength={32}
+                    />
+                    {formData.iban && formData.iban !== 'TR00 0000 0000 0000 0000 0000 00' && validateTurkishIban(formData.iban) && (
+                      <p className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-rose-600 dark:text-rose-400">
+                        <AlertCircle size={13} />
+                        {validateTurkishIban(formData.iban)}
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -487,7 +506,7 @@ export function SettingsModal({
 
         {/* Modal Footer */}
         <div className="px-6 py-4 border-t border-stone-200 dark:border-stone-800 bg-stone-100/90 dark:bg-stone-900/90 flex items-center justify-between rounded-b-2xl">
-          <div className="text-[11px] font-medium text-stone-600 dark:text-stone-400">Eco Coffee v1.2 · Ayarlar Otomatik Kaydedilir</div>
+          <div className="text-[11px] font-medium text-stone-600 dark:text-stone-400">LEMOON KAFE v1.2 · Ayarlar Otomatik Kaydedilir</div>
           <button
             type="button"
             onClick={onClose}

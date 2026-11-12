@@ -51,8 +51,8 @@
 | **DOM Render** | **React DOM** | `^19.2.8` | React bileşenlerinin web ve Electron pencerelerine basılması. |
 | **Tip Güvenliği** | **TypeScript** | `~6.0.2` | Tip hatalarını derleme zamanında yakalama, finansal ve veri modellerinde katı tip güvencesi. |
 | **Derleme & Sunucu** | **Vite** | `^8.2.2` | Ultra hızlı HMR (Hot Module Replacement) ve optimize edilmiş production bundle derlemesi. |
-| **Masaüstü Motoru** | **Electron** | `^33.0.0` | Node.js ve Chromium çekirdeği ile bağımsız masaüstü uygulaması ve çoklu monitör yönetimi. |
-| **Paketleyici (Installer)**| **electron-builder** | `^25.1.0` | Windows NSIS (.exe) kurulum paketi, masaüstü kısayolu ve simge entegrasyonu. |
+| **Masaüstü Motoru** | **Electron** | `^39.0.0` | Node.js ve Chromium çekirdeği ile bağımsız masaüstü uygulaması ve çoklu monitör yönetimi. |
+| **Paketleyici (Installer)**| **electron-builder** | `^26.18.1` | Windows NSIS (.exe) kurulum paketi, masaüstü kısayolu ve simge entegrasyonu. |
 | **Stil ve Tasarım** | **Tailwind CSS** | `^3.4.17` | Utility-first CSS mimarisi, dokunmatik ekranlar için özel tipografi ve renk paletleri. |
 | **CSS İşleme** | **PostCSS** & **Autoprefixer** | `^8.5.26` / `^10.5.4` | Çapraz tarayıcı CSS uyumluluğu ve modern CSS kuralları. |
 | **İkon Seti** | **Lucide React** | `^1.34.0` | Hafif, tutarlı ve modern SVG ikon seti (masa, ödeme, rapor, kullanıcı vb.). |

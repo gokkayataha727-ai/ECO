@@ -35,8 +35,8 @@
     "@vitest/coverage-v8": "^5.1.0",
     "autoprefixer": "^10.5.4",
     "concurrently": "^9.1.0",
-    "electron": "^33.0.0",
-    "electron-builder": "^25.1.0",
+    "electron": "^39.0.0",
+    "electron-builder": "^26.18.1",
     "jsdom": "^29.1.1",
     "oxlint": "^1.79.0",
     "postcss": "^8.5.26",
@@ -56,17 +56,13 @@
     "files": [
       "dist/**/*",
       "electron/**/*",
-      "node_modules/better-sqlite3/**/*",
-      "node_modules/bindings/**/*",
-      "node_modules/file-uri-to-path/**/*"
+      "node_modules/better-sqlite3/**/*"
     ],
     "asar": true,
     "asarUnpack": [
-      "node_modules/better-sqlite3/**/*",
-      "node_modules/bindings/**/*",
-      "node_modules/file-uri-to-path/**/*"
+      "node_modules/better-sqlite3/**/*"
     ],
-    "npmRebuild": true,
+    "npmRebuild": false,
     "extraResources": [
       {
         "from": "build/icons",

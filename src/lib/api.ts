@@ -9,6 +9,7 @@
  */
 
 import type { Product } from '../types'
+import { triggerAutomatedBackup } from './storage'
 
 // ──────────────────────────────────────────────
 // Environment Detection
@@ -112,10 +113,21 @@ export async function updateCustomerDisplay(cartJson: string): Promise<void> {
   }
 }
 
-export async function quitApp(): Promise<void> {
-  if (isElectron()) {
-    await (window as any).electronAPI.quitApp()
+export async function quitApp(adminUsername: string): Promise<{ success: boolean; error?: string }> {
+  if (!adminUsername || !adminUsername.trim()) {
+    return { success: false, error: 'Uygulamadan çıkış için yönetici onayı gereklidir.' }
   }
+  if (isElectron()) {
+    try {
+      await triggerAutomatedBackup('kapanis')
+    } catch {}
+    const res = await (window as any).electronAPI.quitApp({
+      authorized: true,
+      adminUsername: adminUsername.trim(),
+    })
+    return res || { success: true }
+  }
+  return { success: true }
 }
 
 export async function minimizeApp(): Promise<void> {

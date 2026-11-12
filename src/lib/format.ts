@@ -34,10 +34,11 @@ export const getEffectivePrice = (item: CartItem): number => {
   return item.price + optionsDelta
 }
 
-export const calculateTotals = (cart: CartItem[], discountRate: number): OrderTotals => {
-  const subtotal = cart.reduce((sum, item) => sum + getEffectivePrice(item) * item.quantity, 0)
+export const calculateTotals = (cart: CartItem[], discountRate: number, discountAmount = 0): OrderTotals => {
+  const activeItems = cart.filter((item) => item.status !== 'refunded')
+  const subtotal = activeItems.reduce((sum, item) => sum + getEffectivePrice(item) * item.quantity, 0)
   
-  const itemDiscounts = cart.reduce((sum, item) => {
+  const itemDiscounts = activeItems.reduce((sum, item) => {
     if (!item.itemDiscount) return sum
     const lineTotal = getEffectivePrice(item) * item.quantity
     if (item.itemDiscount.type === 'amount') {
@@ -48,11 +49,17 @@ export const calculateTotals = (cart: CartItem[], discountRate: number): OrderTo
   }, 0)
 
   const discountedSubtotal = subtotal - itemDiscounts
-  const globalDiscount = discountedSubtotal * discountRate
+  const globalDiscount = roundCurrency(discountedSubtotal * discountRate)
+  const afterRate = Math.max(0, roundCurrency(discountedSubtotal - globalDiscount))
+  const fixedDiscount = Math.min(afterRate, Math.max(0, roundCurrency(discountAmount)))
   
-  const totalDiscount = itemDiscounts + globalDiscount
+  const totalDiscount = roundCurrency(itemDiscounts + globalDiscount + fixedDiscount)
 
-  return { subtotal, discount: totalDiscount, total: subtotal - totalDiscount }
+  return {
+    subtotal: roundCurrency(subtotal),
+    discount: totalDiscount,
+    total: Math.max(0, roundCurrency(subtotal - totalDiscount)),
+  }
 }
 
 export const paymentMethodLabel = (method: PaymentMethod) => {
@@ -67,7 +74,8 @@ export const paymentMethodLabel = (method: PaymentMethod) => {
 
 export const isTableOccupied = (table: Table): boolean => {
   const hasCustomer = Boolean(table.customerName && table.customerName.trim().length > 0)
-  return table.cart.length > 0 || table.status === 'occupied' || hasCustomer
+  const activeItems = table.cart.filter((item) => item.status !== 'refunded')
+  return activeItems.length > 0 || (table.cart.length > 0 && (table.payments?.length ?? 0) > 0) || table.status === 'occupied' || hasCustomer
 }
 
 export interface LinePaymentState {
@@ -98,8 +106,9 @@ export const deriveLinePaymentStates = (
   cart: CartItem[],
   discountRate: number,
   payments: PartialPayment[] = [],
+  discountAmount = 0,
 ): LinePaymentState[] => {
-  const totals = calculateTotals(cart, discountRate)
+  const totals = calculateTotals(cart, discountRate, discountAmount)
   const grandTotal = roundCurrency(totals.total)
   const discountedSubtotal = cart.reduce((sum, item) => sum + getLineAfterItemDiscount(item), 0)
 
@@ -174,10 +183,22 @@ export const calculateSelectedItemsPayment = (
     const qty = Math.min(Math.max(1, reqQty), line.unpaidQty)
     totalUnits += qty
 
-    const amount =
-      qty === line.unpaidQty
-        ? line.unpaidLineAmount
-        : roundCurrency((line.unpaidLineAmount / line.unpaidQty) * qty)
+    const totalQty = line.item.quantity
+    const paidQty = line.paidQty
+    const lineTotalCents = Math.round(line.lineNetTotal * 100)
+
+    let amount: number
+    if (qty === line.unpaidQty) {
+      // Henüz ödenmemiş kalan tüm adet seçildiyse satırın kalan kuruş tutarının tamamı alınır
+      amount = line.unpaidLineAmount
+    } else {
+      // Kümülatif yuvarlama (Telescoping sum - kuruş farkı ve kayan nokta hatasını sıfırlar):
+      // k adetlik ödeme = yuvarla(satırToplamı × (ödenmişAdet + k) / toplamAdet) − yuvarla(satırToplamı × ödenmişAdet / toplamAdet)
+      const nextTotalPaidCents = Math.round((lineTotalCents * (paidQty + qty)) / totalQty)
+      const currentPaidCents = Math.round((lineTotalCents * paidQty) / totalQty)
+      const amountCents = nextTotalPaidCents - currentPaidCents
+      amount = Math.min(roundCurrency(amountCents / 100), line.unpaidLineAmount)
+    }
 
     entries.push({
       lineId: line.cartItemId,
@@ -301,6 +322,7 @@ export const moveTableOrder = (
         note: '',
         customerName: '',
         discountRate: 0,
+        discountAmount: 0,
         payments: [],
       }
     }
@@ -312,6 +334,7 @@ export const moveTableOrder = (
         note: sourceTable.note || '',
         customerName: sourceTable.customerName || '',
         discountRate: sourceTable.discountRate || 0,
+        discountAmount: sourceTable.discountAmount || 0,
         payments: sourceTable.payments
           ? sourceTable.payments.map((p) => ({
               ...p,
@@ -353,6 +376,7 @@ export const mergeTablesOrder = (
       : mainNote || sourceNote
 
   const mergedDiscountRate = mainTable.discountRate || sourceTable.discountRate || 0
+  const mergedDiscountAmount = roundCurrency((mainTable.discountAmount || 0) + (sourceTable.discountAmount || 0))
   const mainPayments = (mainTable.payments || []).map((p) => ({
     ...p,
     items: p.items ? p.items.map((pi) => ({ ...pi })) : undefined,
@@ -377,6 +401,7 @@ export const mergeTablesOrder = (
         note: mergedNote,
         customerName: mergedCustomerName,
         discountRate: mergedDiscountRate,
+        discountAmount: mergedDiscountAmount,
         payments: mergedPayments,
       }
     }
@@ -388,6 +413,7 @@ export const mergeTablesOrder = (
         note: '',
         customerName: '',
         discountRate: 0,
+        discountAmount: 0,
         payments: [],
       }
     }
@@ -516,4 +542,98 @@ export const splitTableOrder = (
     return t
   })
 }
+
+/**
+ * Verilen tarih/saat değerini güvenli bir biçimde formatlar.
+ * - Değer "19:41" veya "19:41:00" gibi doğrudan saat stringi ise saat:dakika kısmını ("19:41") döner.
+ * - Değer ISO string ("2026-11-05T19:41:00Z") veya geçerli bir Date/timestamp ise:
+ *   - Bugüne aitse: "19:41"
+ *   - Bugünden önceki veya farklı bir güne aitse: "05 Kas 19:41"
+ * - Değer boş, geçersiz veya 'Invalid Date' ise fallback'i dener.
+ * - Fallback de geçersiz veya yoksa boş string ("") döner. ASLA "Invalid Date" döndürmez.
+ */
+export const formatTime = (
+  value?: string | number | Date | null,
+  fallback?: string | number | Date | null,
+): string => {
+  const tryFormat = (val: string | number | Date | null | undefined): string | null => {
+    if (val === undefined || val === null || val === '') return null
+
+    // 1. Eğer doğrudan "19:41" veya "19:41:25" gibi saat metni ise
+    if (typeof val === 'string') {
+      const trimmed = val.trim()
+      const timeOnlyMatch = trimmed.match(/^(\d{1,2}):(\d{2})(:(\d{2}))?$/)
+      if (timeOnlyMatch) {
+        const hh = timeOnlyMatch[1].padStart(2, '0')
+        const mm = timeOnlyMatch[2]
+        return `${hh}:${mm}`
+      }
+    }
+
+    // 2. Date nesnesi veya parse edilebilir tarih
+    let d: Date
+    if (val instanceof Date) {
+      d = val
+    } else if (typeof val === 'number') {
+      d = new Date(val)
+    } else {
+      d = new Date(val)
+    }
+
+    if (isNaN(d.getTime())) {
+      return null
+    }
+
+    const now = new Date()
+    const isToday =
+      d.getFullYear() === now.getFullYear() &&
+      d.getMonth() === now.getMonth() &&
+      d.getDate() === now.getDate()
+
+    const timePart = d.toLocaleTimeString('tr-TR', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+
+    if (isToday) {
+      return timePart
+    }
+
+    const datePart = d.toLocaleDateString('tr-TR', {
+      day: '2-digit',
+      month: 'short',
+    })
+    return `${datePart} ${timePart}`
+  }
+
+  const result = tryFormat(value)
+  if (result !== null) return result
+
+  const fallbackResult = tryFormat(fallback)
+  if (fallbackResult !== null) return fallbackResult
+
+  return ''
+}
+
+/**
+ * Türkçe para girişi temizleyicisi:
+ * - '140', '140,5', '140.50' gibi formatları destekler.
+ * - Harfleri ve negatif işaretini temizler.
+ * - En fazla 2 ondalık basamağa izin verir.
+ */
+export const sanitizeDecimalInput = (raw: string): string => {
+  // Yalnızca rakam, virgül ve nokta bırak
+  let cleaned = raw.replace(/[^\d.,]/g, '')
+  // Eğer hem virgül hem nokta varsa ilk olanı ayraç yap
+  const firstSeparatorIndex = cleaned.search(/[,.]/)
+  if (firstSeparatorIndex !== -1) {
+    const sep = cleaned[firstSeparatorIndex]
+    const parts = cleaned.split(sep)
+    const integerPart = parts[0].replace(/[^\d]/g, '')
+    const decimalPart = parts.slice(1).join('').replace(/[^\d]/g, '').slice(0, 2)
+    return `${integerPart}${sep}${decimalPart}`
+  }
+  return cleaned
+}
+
 

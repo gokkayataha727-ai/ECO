@@ -31,6 +31,17 @@ interface TableOrderViewProps {
   onDeleteProduct?: (id: string) => void
   isDayOpen?: boolean
   onOpenDayModal?: () => void
+  onRefundItem?: (item: CartItem) => void
+  onRefundTable?: () => void
+  onStartNewBatch?: () => void
+  currentBatchNumber?: number
+  canClearCart?: boolean
+  canViewAdisyon?: boolean
+  canRefundItem?: boolean
+  canRefundTable?: boolean
+  canStartNewBatch?: boolean
+  canEditNoteCustomer?: boolean
+  canTakePayment?: boolean
 }
 
 export const TableOrderView = memo(function TableOrderView({
@@ -60,6 +71,17 @@ export const TableOrderView = memo(function TableOrderView({
   onDeleteProduct,
   isDayOpen = true,
   onOpenDayModal,
+  onRefundItem,
+  onRefundTable,
+  onStartNewBatch,
+  currentBatchNumber = 1,
+  canClearCart,
+  canViewAdisyon,
+  canRefundItem,
+  canRefundTable,
+  canStartNewBatch,
+  canEditNoteCustomer,
+  canTakePayment,
 }: TableOrderViewProps) {
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('Tümü')
@@ -130,9 +152,20 @@ export const TableOrderView = memo(function TableOrderView({
           onRemoveItem={onRemoveItem}
           onUpdateQuantity={onUpdateQuantity}
           onApplyItemDiscount={onApplyItemDiscount}
+          onRefundItem={onRefundItem}
+          onRefundTable={onRefundTable}
+          onStartNewBatch={onStartNewBatch}
+          currentBatchNumber={currentBatchNumber}
           orderNumber={tableName}
           totals={totals}
           payments={payments}
+          canClearCart={canClearCart}
+          canViewAdisyon={canViewAdisyon}
+          canRefundItem={canRefundItem}
+          canRefundTable={canRefundTable}
+          canStartNewBatch={canStartNewBatch}
+          canEditNoteCustomer={canEditNoteCustomer}
+          canTakePayment={canTakePayment}
         />
       </section>
     </div>

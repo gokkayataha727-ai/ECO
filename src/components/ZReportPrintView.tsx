@@ -49,15 +49,7 @@ export function ZReportPrintView({
       ? (day.cashDifference ?? roundCurrency(day.countedCash - expectedCash))
       : null
 
-  const cutoffTime =
-    day?.posZCutoffTime || report.posZCutoffTime || settings?.posZCutoffTime || '23:57'
-  const cardCarryIn = report.cardCarryIn ?? day?.cardCarryIn ?? 0
-  const cardBeforeCutoff =
-    report.cardBeforeCutoff ?? day?.cardBeforeCutoff ?? report.paymentDistribution.card
-  const cardAfterCutoff = report.cardAfterCutoff ?? day?.cardAfterCutoff ?? 0
-  const expectedZ =
-    report.expectedZ ?? day?.expectedZ ?? roundCurrency(cardCarryIn + cardBeforeCutoff)
-  const cardCarryOut = report.cardCarryOut ?? day?.cardCarryOut ?? cardAfterCutoff
+  const expectedZ = report.expectedZ ?? day?.expectedZ ?? report.paymentDistribution.card
   const enteredZ = report.enteredZ ?? day?.enteredZ
   const zDiff =
     typeof enteredZ === 'number'
@@ -67,7 +59,7 @@ export function ZReportPrintView({
   if (mode === 'a4') {
     return (
       <div className="z-report-print z-report-a4 bg-white text-stone-900 p-6 rounded-2xl border border-stone-200 max-w-3xl mx-auto text-xs">
-        <div className="flex items-center justify-between border-b-2 border-stone-800 pb-4 mb-4">
+        <div className="z-report-header flex items-center justify-between border-b-2 border-stone-800 pb-4 mb-4">
           <div className="flex items-center gap-3">
             <AppLogo className="w-12 h-12 object-contain" />
             <div>
@@ -86,7 +78,7 @@ export function ZReportPrintView({
         </div>
 
         {day && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-stone-50 p-3 rounded-xl border border-stone-200 mb-4">
+          <div className="z-report-day-info grid grid-cols-2 sm:grid-cols-4 gap-3 bg-stone-50 p-3 rounded-xl border border-stone-200 mb-4">
             <div>
               <span className="text-stone-500 block text-[10px] font-bold uppercase">Açılış</span>
               <strong className="text-stone-800">{openedTimeStr}</strong>
@@ -114,36 +106,36 @@ export function ZReportPrintView({
           </div>
         )}
 
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5 mb-5">
-          <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200">
+        <div className="z-report-kpi-grid grid grid-cols-3 sm:grid-cols-6 gap-2.5 mb-5">
+          <div className="z-report-kpi-card p-2.5 rounded-xl bg-stone-50 border border-stone-200">
             <span className="text-[10px] text-stone-500 font-bold block">TOPLAM CİRO</span>
             <strong className="text-sm font-extrabold text-stone-900">
-              {formatCurrency(report.totalRevenue)}
+              {formatCurrency(report.grossItemsRevenue ?? report.totalRevenue)}
             </strong>
           </div>
-          <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200">
+          <div className="z-report-kpi-card p-2.5 rounded-xl bg-stone-50 border border-stone-200">
             <span className="text-[10px] text-stone-500 font-bold block">SİPARİŞ SAYISI</span>
             <strong className="text-sm font-extrabold text-stone-900">{report.orderCount}</strong>
           </div>
-          <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200">
-            <span className="text-[10px] text-stone-500 font-bold block">ORT. ADİSYON</span>
+          <div className="z-report-kpi-card p-2.5 rounded-xl bg-stone-50 border border-stone-200">
+            <span className="text-[10px] text-stone-500 font-bold block">ÖDENEN MASALAR</span>
             <strong className="text-sm font-extrabold text-stone-900">
-              {formatCurrency(report.averageBasket)}
+              {formatCurrency(report.paidTablesTotal ?? report.totalRevenue)}
             </strong>
           </div>
-          <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200">
+          <div className="z-report-kpi-card p-2.5 rounded-xl bg-stone-50 border border-stone-200">
             <span className="text-[10px] text-stone-500 font-bold block">TOPLAM KDV</span>
             <strong className="text-sm font-extrabold text-stone-900">
               {formatCurrency(report.totalTax)}
             </strong>
           </div>
-          <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200">
+          <div className="z-report-kpi-card p-2.5 rounded-xl bg-stone-50 border border-stone-200">
             <span className="text-[10px] text-stone-500 font-bold block">TOPLAM İNDİRİM</span>
             <strong className="text-sm font-extrabold text-stone-900">
               {formatCurrency(report.totalDiscount)}
             </strong>
           </div>
-          <div className="p-2.5 rounded-xl bg-stone-50 border border-stone-200">
+          <div className="z-report-kpi-card p-2.5 rounded-xl bg-stone-50 border border-stone-200">
             <span className="text-[10px] text-stone-500 font-bold block">İPTAL ({report.cancelledCount})</span>
             <strong className="text-sm font-extrabold text-rose-700">
               {formatCurrency(report.cancelledTotal)}
@@ -151,8 +143,8 @@ export function ZReportPrintView({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
-          <div className="p-3.5 rounded-xl border border-stone-200">
+        <div className="z-report-breakdown-grid grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
+          <div className="z-report-card p-3.5 rounded-xl border border-stone-200">
             <h4 className="font-extrabold text-stone-800 uppercase text-[11px] mb-2 border-b border-stone-100 pb-1.5">
               Ödeme Yöntemi Dağılımı
             </h4>
@@ -173,7 +165,7 @@ export function ZReportPrintView({
           </div>
 
           {day && (
-            <div className="p-3.5 rounded-xl border border-stone-200">
+            <div className="z-report-card p-3.5 rounded-xl border border-stone-200">
               <h4 className="font-extrabold text-stone-800 uppercase text-[11px] mb-2 border-b border-stone-100 pb-1.5">
                 Kasa Özeti
               </h4>
@@ -214,26 +206,14 @@ export function ZReportPrintView({
             </div>
           )}
 
-          <div className="p-3.5 rounded-xl border border-stone-200 bg-stone-50/50">
+          <div className="z-report-card p-3.5 rounded-xl border border-stone-200 bg-stone-50/50">
             <h4 className="font-extrabold text-stone-800 uppercase text-[11px] mb-2 border-b border-stone-100 pb-1.5">
-              POS Z & Kart Devir ({cutoffTime})
+              POS Z RAPORU ÖZETİ
             </h4>
             <div className="space-y-1.5">
               <div className="flex justify-between">
-                <span>Önceki Günden Devreden</span>
-                <strong>{formatCurrency(cardCarryIn)}</strong>
-              </div>
-              <div className="flex justify-between">
-                <span>Kart Satış (Toplam)</span>
+                <span>Kart Satışları (Toplam)</span>
                 <strong>{formatCurrency(report.paymentDistribution.card)}</strong>
-              </div>
-              <div className="flex justify-between text-stone-500 pl-2">
-                <span>↳ {cutoffTime} Öncesi (Z Dahil)</span>
-                <span className="font-semibold text-stone-700">{formatCurrency(cardBeforeCutoff)}</span>
-              </div>
-              <div className="flex justify-between text-stone-500 pl-2">
-                <span>↳ {cutoffTime} Sonrası (Devreden)</span>
-                <span className="font-semibold text-stone-700">{formatCurrency(cardAfterCutoff)}</span>
               </div>
               <div className="flex justify-between pt-1 border-t border-stone-200 font-bold">
                 <span>Beklenen POS Z Raporu</span>
@@ -264,23 +244,19 @@ export function ZReportPrintView({
                   )}
                 </>
               )}
-              <div className="flex justify-between pt-1 border-t border-stone-200 text-amber-900 font-bold">
-                <span>Yarına Devreden Kart</span>
-                <strong>{formatCurrency(cardCarryOut)}</strong>
-              </div>
             </div>
           </div>
         </div>
 
-        <div className="mb-4">
+        <div className="z-report-table-section mb-4">
           <h4 className="font-extrabold text-stone-800 uppercase text-[11px] mb-2">
             Satılan Ürünler ({report.soldProducts.length} kalem)
           </h4>
           {report.soldProducts.length === 0 ? (
             <p className="text-stone-400 py-2">Bu dönemde ürün satışı bulunmuyor.</p>
           ) : (
-            <table className="w-full text-left border-collapse border border-stone-200">
-              <thead>
+            <table className="z-report-table w-full text-left border-collapse border border-stone-200">
+              <thead className="z-report-thead">
                 <tr className="bg-stone-100 text-[10px] uppercase text-stone-600">
                   <th className="py-1.5 px-2.5 border-b border-stone-200">Ürün</th>
                   <th className="py-1.5 px-2.5 border-b border-stone-200">Kategori</th>
@@ -289,7 +265,7 @@ export function ZReportPrintView({
                   <th className="py-1.5 px-2.5 border-b border-stone-200 text-right">Pay</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-stone-100">
+              <tbody className="z-report-tbody divide-y divide-stone-100">
                 {report.soldProducts.map((p) => (
                   <tr key={p.productKey}>
                     <td className="py-1.5 px-2.5 font-semibold">{p.name}</td>
@@ -306,7 +282,7 @@ export function ZReportPrintView({
           )}
         </div>
 
-        <div className="text-center text-[10px] text-stone-400 pt-3 border-t border-stone-200">
+        <div className="z-report-footer text-center text-[10px] text-stone-400 pt-3 border-t border-stone-200">
           Rapor Oluşturulma Zamanı: {new Date(report.generatedAt).toLocaleString('tr-TR')} ·{' '}
           {storeName}
         </div>
@@ -348,8 +324,8 @@ export function ZReportPrintView({
           <span>{report.orderCount} adet</span>
         </div>
         <div className="receipt-line">
-          <span>Ortalama Adisyon</span>
-          <span>{formatCurrency(report.averageBasket)}</span>
+          <span>Ödenen Masalar Toplamı</span>
+          <span>{formatCurrency(report.paidTablesTotal ?? report.totalRevenue)}</span>
         </div>
         <div className="receipt-line">
           <span>Toplam İndirim</span>
@@ -361,7 +337,7 @@ export function ZReportPrintView({
         </div>
         <div className="receipt-line receipt-total">
           <span>TOPLAM CİRO</span>
-          <span>{formatCurrency(report.totalRevenue)}</span>
+          <span>{formatCurrency(report.grossItemsRevenue ?? report.totalRevenue)}</span>
         </div>
 
         <div className="receipt-dash" />
@@ -383,23 +359,11 @@ export function ZReportPrintView({
 
         <div className="receipt-dash" />
         <div style={{ fontSize: '10px', fontWeight: 800, padding: '6px 0 2px' }}>
-          POS Z RAPORU & KART DEVİR ({cutoffTime})
+          POS Z RAPORU ÖZETİ
         </div>
         <div className="receipt-line">
-          <span>Önceki Günden Devreden</span>
-          <span>{formatCurrency(cardCarryIn)}</span>
-        </div>
-        <div className="receipt-line">
-          <span>Kart Satış (Toplam)</span>
+          <span>Kart Satışları (Toplam)</span>
           <span>{formatCurrency(report.paymentDistribution.card)}</span>
-        </div>
-        <div className="receipt-line" style={{ fontSize: '9px', color: '#666' }}>
-          <span>  ↳ {cutoffTime} Öncesi (Z Dahil)</span>
-          <span>{formatCurrency(cardBeforeCutoff)}</span>
-        </div>
-        <div className="receipt-line" style={{ fontSize: '9px', color: '#666' }}>
-          <span>  ↳ {cutoffTime} Sonrası (Devreden)</span>
-          <span>{formatCurrency(cardAfterCutoff)}</span>
         </div>
         <div className="receipt-line" style={{ fontWeight: 800 }}>
           <span>Beklenen POS Z Raporu</span>
@@ -422,10 +386,6 @@ export function ZReportPrintView({
             )}
           </>
         )}
-        <div className="receipt-line" style={{ fontWeight: 800 }}>
-          <span>Yarına Devreden Kart</span>
-          <span>{formatCurrency(cardCarryOut)}</span>
-        </div>
 
         {day && (
           <>

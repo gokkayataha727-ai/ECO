@@ -16,7 +16,8 @@ import { useEffect, useState } from 'react'
 import { AppLogo } from './AppLogo'
 import { useHomeStats } from '../hooks/useHomeStats'
 import { formatCurrency, paymentMethodLabel } from '../lib/format'
-import type { AppSettings, BusinessDay, CompletedOrder, Table } from '../types'
+import { can } from '../lib/permissions'
+import type { AppSettings, BusinessDay, CompletedOrder, Session, Table } from '../types'
 
 interface HomePageProps {
   completedOrders: CompletedOrder[]
@@ -28,6 +29,7 @@ interface HomePageProps {
   onOpenSummary: () => void
   onOpenProducts: () => void
   settings?: AppSettings
+  currentSession?: Session | null
 }
 
 const formatDateTime = (date: Date) => {
@@ -64,9 +66,21 @@ export function HomePage({
   onOpenSummary,
   onOpenProducts,
   settings,
+  currentSession,
 }: HomePageProps) {
   const stats = useHomeStats(completedOrders, tables, openBusinessDay?.id)
   const [now, setNow] = useState(() => new Date())
+
+  const [, setPermTick] = useState(0)
+  useEffect(() => {
+    const handlePermUpdate = () => setPermTick((t) => t + 1)
+    window.addEventListener('permissions-updated', handlePermUpdate)
+    return () => window.removeEventListener('permissions-updated', handlePermUpdate)
+  }, [])
+
+  const canViewReports = can(currentSession, 'reports_view_general', settings) || can(currentSession, 'reports_view_own', settings)
+  const canManageProducts = can(currentSession, 'product_manage', settings)
+  const canManageDay = can(currentSession, 'day_open', settings) || can(currentSession, 'day_close', settings)
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 30_000)
@@ -109,12 +123,16 @@ export function HomePage({
       desc: 'Masa durumlarını gör',
       action: () => onViewChange('tables'),
     },
-    {
-      icon: Package,
-      title: 'Ürün Yönetimi',
-      desc: 'Menüyü düzenle',
-      action: () => onOpenProducts(),
-    },
+    ...(canManageProducts
+      ? [
+          {
+            icon: Package,
+            title: 'Ürün Yönetimi',
+            desc: 'Menüyü düzenle',
+            action: () => onOpenProducts(),
+          },
+        ]
+      : []),
   ]
 
   return (
@@ -127,7 +145,7 @@ export function HomePage({
           </div>
           <div className="welcome-info">
             <h1 className="welcome-title">
-              Hoş geldin, <span>{settings?.cashierName || 'LEMOON'}</span>
+              Hoş geldin, <span>{currentSession?.fullName || settings?.cashierName || 'LEMOON'}</span>
             </h1>
             <div className="welcome-meta">
               <span className="welcome-location">
@@ -147,26 +165,32 @@ export function HomePage({
               <div className="status-pill">
                 <span className="live-dot" /> Gün Açık
               </div>
-              {onCloseDayModal && (
+              {canManageDay && onCloseDayModal && (
                 <button
                   type="button"
                   onClick={onCloseDayModal}
-                  className="px-3 py-1.5 rounded-full text-[11px] font-extrabold bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 inline-flex items-center gap-1 transition-colors"
+                  className="px-3.5 py-1.5 rounded-full text-xs font-black bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 inline-flex items-center gap-1.5 transition-colors"
                 >
-                  <Moon size={12} />
+                  <Moon size={13} />
                   <span>Günü Kapat</span>
                 </button>
               )}
             </>
           ) : (
-            <button
-              type="button"
-              onClick={onOpenDayModal}
-              className="status-pill status-pill--closed inline-flex items-center gap-1.5 cursor-pointer"
-            >
-              <span className="live-dot live-dot--closed" /> Gün Kapalı · Günü Aç
-              <Sun size={12} />
-            </button>
+            canManageDay ? (
+              <button
+                type="button"
+                onClick={onOpenDayModal}
+                className="status-pill status-pill--closed inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <span className="live-dot live-dot--closed" /> Gün Kapalı · Günü Aç
+                <Sun size={12} />
+              </button>
+            ) : (
+              <div className="status-pill status-pill--closed inline-flex items-center gap-1.5 cursor-default">
+                <span className="live-dot live-dot--closed" /> Gün Kapalı
+              </div>
+            )
           )}
         </div>
       </div>
@@ -178,13 +202,15 @@ export function HomePage({
             <p className="section-kicker">İstatistikler</p>
             <h2 className="report-title">Bugünün Özeti</h2>
           </div>
-          <button
-            type="button"
-            className="report-link"
-            onClick={onOpenSummary}
-          >
-            Detaylı Rapor <ArrowRight size={14} />
-          </button>
+          {canViewReports && (
+            <button
+              type="button"
+              className="report-link"
+              onClick={onOpenSummary}
+            >
+              Detaylı Rapor <ArrowRight size={14} />
+            </button>
+          )}
         </div>
 
         <div className="kpi-grid">

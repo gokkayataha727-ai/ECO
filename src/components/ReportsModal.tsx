@@ -21,27 +21,36 @@ import {
   Printer,
   Receipt,
   Search,
-  ShoppingBag,
   Sun,
   Trash2,
   TrendingUp,
   User,
+  Users,
   Wallet,
   X,
 } from 'lucide-react'
 import {
   buildReportFromOrders,
+  createIstanbulDate,
   formatDayShortLabel,
+  formatIstanbulDateString,
+  getIstanbulDayBounds,
+  getIstanbulParts,
   getReportForBusinessDay,
+  getStoredRefunds,
 } from '../lib/businessDay'
-import { formatCurrency, roundCurrency } from '../lib/format'
+import { formatCurrency, roundCurrency, getEffectivePrice } from '../lib/format'
+import { getAllUsers } from '../lib/auth'
 import type {
   AppSettings,
   BusinessDay,
   CompletedOrder,
+  Session,
   Table,
 } from '../types'
+import { can } from '../lib/permissions'
 import { ZReportPrintView } from './ZReportPrintView'
+import { PrintPortal } from './PrintPortal'
 import { ReceiptsTable } from './reports/ReceiptsTable'
 
 type FilterMode = 'day' | 'today' | 'yesterday' | 'last7' | 'custom'
@@ -60,6 +69,8 @@ interface ReportsModalProps {
   onClearReports?: () => void
   onOpenDayModal?: () => void
   onCloseDayModal?: () => void
+  onReopenOrder?: (orderId: string) => void
+  currentSession?: Session | null
 }
 
 const LEGACY_DAY_ID = '__legacy__'
@@ -76,7 +87,12 @@ export function ReportsModal({
   onClearReports,
   onOpenDayModal,
   onCloseDayModal,
+  onReopenOrder,
+  currentSession,
 }: ReportsModalProps) {
+  const canViewGeneral = can(currentSession, 'reports_view_general', settings)
+  const canViewOwn = can(currentSession, 'reports_view_own', settings)
+  const canReopen = can(currentSession, 'reopen_order', settings)
   const sortedDays = useMemo(
     () =>
       [...businessDays].sort(
@@ -101,13 +117,11 @@ export function ReportsModal({
   const [filterMode, setFilterMode] = useState<FilterMode>('day')
   const [userSelectedDayId, setUserSelectedDayId] = useState<string | null>(null)
   const selectedDayId = initialSelectedDayId || userSelectedDayId || defaultDayId
-  const [customStart, setCustomStart] = useState<string>(() => {
-    const d = new Date()
-    d.setDate(d.getDate() - 7)
-    return d.toISOString().slice(0, 10)
-  })
+  const [customStart, setCustomStart] = useState<string>(() =>
+    formatIstanbulDateString(new Date(Date.now() - 7 * 86400000)),
+  )
   const [customEnd, setCustomEnd] = useState<string>(() =>
-    new Date().toISOString().slice(0, 10),
+    formatIstanbulDateString(new Date()),
   )
 
   const [productSearch, setProductSearch] = useState('')
@@ -132,7 +146,14 @@ export function ReportsModal({
   const { activeReport, filteredOrders, periodTitle } = useMemo(() => {
     if (filterMode === 'day') {
       if (selectedDayId === LEGACY_DAY_ID) {
-        const rep = buildReportFromOrders(legacyOrders, taxRate)
+        const rep = buildReportFromOrders(
+          legacyOrders,
+          taxRate,
+          undefined,
+          undefined,
+          undefined,
+          { legacyOnly: true },
+        )
         return {
           activeReport: rep,
           filteredOrders: legacyOrders,
@@ -164,25 +185,38 @@ export function ReportsModal({
     }
 
     const now = new Date()
-    let start: Date
-    let end: Date = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+    const todayParts = getIstanbulParts(now)
+    const todayNoon = createIstanbulDate(todayParts.year, todayParts.month, todayParts.day, 12, 0, 0)
+    const todayStart = createIstanbulDate(todayParts.year, todayParts.month, todayParts.day, 0, 0, 0)
+    const todayEnd = new Date(
+      createIstanbulDate(todayParts.year, todayParts.month, todayParts.day, 23, 59, 59).getTime() + 999,
+    )
+
+    let start: Date = todayStart
+    let end: Date = todayEnd
     let label = ''
 
     if (filterMode === 'today') {
-      start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0)
+      start = todayStart
+      end = todayEnd
       label = 'Bugün'
     } else if (filterMode === 'yesterday') {
-      start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 0, 0, 0, 0)
-      end = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999)
+      const yestParts = getIstanbulParts(new Date(todayNoon.getTime() - 86400000))
+      start = createIstanbulDate(yestParts.year, yestParts.month, yestParts.day, 0, 0, 0)
+      end = new Date(
+        createIstanbulDate(yestParts.year, yestParts.month, yestParts.day, 23, 59, 59).getTime() + 999,
+      )
       label = 'Dün'
     } else if (filterMode === 'last7') {
-      start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6, 0, 0, 0, 0)
+      const startParts = getIstanbulParts(new Date(todayNoon.getTime() - 6 * 86400000))
+      start = createIstanbulDate(startParts.year, startParts.month, startParts.day, 0, 0, 0)
+      end = todayEnd
       label = 'Son 7 Gün'
     } else {
-      start = customStart
-        ? new Date(`${customStart}T00:00:00`)
-        : new Date(now.getTime() - 7 * 86400000)
-      end = customEnd ? new Date(`${customEnd}T23:59:59.999`) : end
+      const startBounds = customStart ? getIstanbulDayBounds(customStart) : null
+      const endBounds = customEnd ? getIstanbulDayBounds(customEnd) : null
+      start = startBounds ? startBounds.start : new Date(todayStart.getTime() - 7 * 86400000)
+      end = endBounds ? endBounds.end : todayEnd
       label = `${customStart || '—'} / ${customEnd || '—'}`
     }
 
@@ -192,7 +226,9 @@ export function ReportsModal({
     })
 
     return {
-      activeReport: buildReportFromOrders(rangeOrders, taxRate),
+      activeReport: buildReportFromOrders(rangeOrders, taxRate, tables, undefined, undefined, {
+        dateRange: { start, end },
+      }),
       filteredOrders: rangeOrders,
       periodTitle: label,
     }
@@ -208,8 +244,10 @@ export function ReportsModal({
     customEnd,
   ])
 
-  const handleDownloadPdf = () => {
-    setPrintMode('a4')
+  const handlePrintReport = (targetMode?: 'a4' | 'receipt') => {
+    if (targetMode) {
+      setPrintMode(targetMode)
+    }
 
     const safeDate = new Date().toISOString().slice(0, 10)
     const sanitizedPeriod = (periodTitle || 'Z_Raporu')
@@ -225,7 +263,11 @@ export function ReportsModal({
       setTimeout(() => {
         document.title = prevTitle
       }, 1000)
-    }, 50)
+    }, 60)
+  }
+
+  const handleDownloadPdf = () => {
+    handlePrintReport('a4')
   }
 
   const filteredAndSortedProducts = useMemo(() => {
@@ -308,6 +350,148 @@ export function ReportsModal({
     }
   }, [filteredOrders, receiptPage])
 
+  const waiterSummaryData = useMemo(() => {
+    const allUsers = getAllUsers()
+    const allRefunds = getStoredRefunds()
+
+    // Filter relevant refunds for this business day / period
+    const relevantRefunds = allRefunds.filter((r) => {
+      if (selectedBusinessDay) {
+        return r.businessDayId === selectedBusinessDay.id
+      }
+      return true
+    })
+
+    const map = new Map<
+      string,
+      {
+        fullName: string
+        role: string
+        totalSalesRevenue: number
+        itemCount: number
+        paymentCount: number
+        paymentAmount: number
+        refundCount: number
+        refundAmount: number
+      }
+    >()
+
+    // Initialize all active waiters so they appear even with 0 sales
+    allUsers
+      .filter((u) => !u.isDeleted && u.role === 'waiter' && u.status === 'active')
+      .forEach((u) => {
+        map.set(u.fullName, {
+          fullName: u.fullName,
+          role: 'Garson',
+          totalSalesRevenue: 0,
+          itemCount: 0,
+          paymentCount: 0,
+          paymentAmount: 0,
+          refundCount: 0,
+          refundAmount: 0,
+        })
+      })
+
+    const validOrders = filteredOrders.filter((o) => !o.cancelled)
+
+    for (const order of validOrders) {
+      // Kalem bazlı satışlar
+      for (const item of order.items) {
+        if (item.status === 'refunded') continue
+        const waiterName = item.addedBy || order.cashier || 'Bilinmeyen'
+        if (!map.has(waiterName)) {
+          map.set(waiterName, {
+            fullName: waiterName,
+            role: 'Personel',
+            totalSalesRevenue: 0,
+            itemCount: 0,
+            paymentCount: 0,
+            paymentAmount: 0,
+            refundCount: 0,
+            refundAmount: 0,
+          })
+        }
+        const stat = map.get(waiterName)!
+        const lineTotal = getEffectivePrice(item) * item.quantity
+        stat.totalSalesRevenue = roundCurrency(stat.totalSalesRevenue + lineTotal)
+        stat.itemCount += item.quantity
+      }
+
+      // Ödeme tahsilatları
+      if (order.payments && order.payments.length > 0) {
+        for (const p of order.payments) {
+          const cashierName = p.cashier || order.cashier || 'Bilinmeyen'
+          if (!map.has(cashierName)) {
+            map.set(cashierName, {
+              fullName: cashierName,
+              role: 'Personel',
+              totalSalesRevenue: 0,
+              itemCount: 0,
+              paymentCount: 0,
+              paymentAmount: 0,
+              refundCount: 0,
+              refundAmount: 0,
+            })
+          }
+          const stat = map.get(cashierName)!
+          stat.paymentCount += 1
+          stat.paymentAmount = roundCurrency(stat.paymentAmount + p.amount)
+        }
+      } else {
+        const cashierName = order.cashier || 'Bilinmeyen'
+        if (!map.has(cashierName)) {
+          map.set(cashierName, {
+            fullName: cashierName,
+            role: 'Personel',
+            totalSalesRevenue: 0,
+            itemCount: 0,
+            paymentCount: 0,
+            paymentAmount: 0,
+            refundCount: 0,
+            refundAmount: 0,
+          })
+        }
+        const stat = map.get(cashierName)!
+        stat.paymentCount += 1
+        stat.paymentAmount = roundCurrency(stat.paymentAmount + order.totals.total)
+      }
+    }
+
+    // İadeler
+    for (const r of relevantRefunds) {
+      const user = r.refundedBy || r.createdBy || 'Bilinmeyen'
+      if (!map.has(user)) {
+        map.set(user, {
+          fullName: user,
+          role: 'Personel',
+          totalSalesRevenue: 0,
+          itemCount: 0,
+          paymentCount: 0,
+          paymentAmount: 0,
+          refundCount: 0,
+          refundAmount: 0,
+        })
+      }
+      const stat = map.get(user)!
+      stat.refundCount += 1
+      stat.refundAmount = roundCurrency(stat.refundAmount + r.amount)
+    }
+
+    const result = Array.from(map.values()).sort(
+      (a, b) => b.paymentAmount - a.paymentAmount || b.totalSalesRevenue - a.totalSalesRevenue,
+    )
+
+    if (!canViewGeneral && canViewOwn && currentSession) {
+      return result.filter(
+        (s) =>
+          s.fullName.toLowerCase() === currentSession.fullName.toLowerCase() ||
+          s.fullName.toLowerCase() === currentSession.username.toLowerCase(),
+      )
+    }
+
+    return result
+  }, [filteredOrders, selectedBusinessDay, canViewGeneral, canViewOwn, currentSession])
+
   if (!isOpen) return null
 
   const paymentMethodsList = [
@@ -371,7 +555,7 @@ export function ReportsModal({
               <button
                 type="button"
                 onClick={() => setShowClearConfirm(true)}
-                className="px-3.5 py-2 rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-400 text-xs font-extrabold flex items-center gap-1.5 transition-colors"
+                className="px-3.5 py-2 rounded-xl border border-rose-200 dark:border-rose-900 bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/60 text-rose-700 dark:text-rose-400 text-sm font-extrabold flex items-center gap-1.5 transition-colors"
                 title="Geçmiş rapor, satış ve deneme masa verilerini temizle"
               >
                 <Trash2 size={15} />
@@ -382,7 +566,7 @@ export function ReportsModal({
             <button
               type="button"
               onClick={handleDownloadPdf}
-              className="px-3.5 py-2 rounded-xl border border-[#dfd5cc] bg-[#fcfaf7] hover:bg-[#f4ebe3] text-[#5c493d] text-xs font-extrabold flex items-center gap-1.5 transition-colors"
+              className="px-3.5 py-2 rounded-xl border border-[#dfd5cc] bg-[#fcfaf7] hover:bg-[#f4ebe3] text-[#5c493d] text-sm font-extrabold flex items-center gap-1.5 transition-colors"
               title="Z Raporunu ve satış özetini A4 PDF olarak kaydet / indir"
             >
               <FileDown size={15} />
@@ -392,7 +576,7 @@ export function ReportsModal({
             <button
               type="button"
               onClick={() => setShowPrintPreview((v) => !v)}
-              className={`px-3.5 py-2 rounded-xl text-xs font-extrabold flex items-center gap-1.5 transition-colors ${
+              className={`px-3.5 py-2 rounded-xl text-sm font-extrabold flex items-center gap-1.5 transition-colors ${
                 showPrintPreview
                   ? 'bg-[#8a6d57] text-white'
                   : 'bg-[#3b2b21] hover:bg-[#5c493d] text-white'
@@ -507,18 +691,24 @@ export function ReportsModal({
 
         {/* Main Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-6">
-          {/* Yazdırma ve PDF için her zaman hazır A4 Z-Raporu (ekranda gizli, baskıda görünür) */}
-          {!showPrintPreview && (
-            <div className="print-only">
+          {/* Isolated root-level print portal for multi-page A4 PDF & thermal receipt */}
+          <PrintPortal>
+            <div
+              className={`print-container ${
+                (showPrintPreview ? printMode : 'a4') === 'a4'
+                  ? 'print-a4'
+                  : 'print-receipt'
+              }`}
+            >
               <ZReportPrintView
                 report={activeReport}
                 day={selectedBusinessDay}
                 titleLabel={periodTitle}
                 settings={settings}
-                mode="a4"
+                mode={showPrintPreview ? printMode : 'a4'}
               />
             </div>
-          )}
+          </PrintPortal>
 
           {showPrintPreview ? (
             <div className="max-w-4xl mx-auto space-y-4">
@@ -558,7 +748,7 @@ export function ReportsModal({
                   </div>
                   <button
                     type="button"
-                    onClick={() => window.print()}
+                    onClick={() => handlePrintReport()}
                     className="px-4 py-2 rounded-xl bg-[#3b2b21] hover:bg-[#5c493d] text-white text-xs font-extrabold flex items-center gap-1.5"
                   >
                     <Printer size={15} />
@@ -819,23 +1009,10 @@ export function ReportsModal({
 
                     {/* POS Z Raporu Özeti */}
                     {(() => {
-                      const cutoffTime =
-                        selectedBusinessDay.posZCutoffTime ||
-                        activeReport.posZCutoffTime ||
-                        settings?.posZCutoffTime ||
-                        '23:57'
-                      const carryIn =
-                        activeReport.cardCarryIn ?? selectedBusinessDay.cardCarryIn ?? 0
-                      const beforeCutoff =
-                        activeReport.cardBeforeCutoff ??
-                        selectedBusinessDay.cardBeforeCutoff ??
-                        activeReport.paymentDistribution.card
-                      const afterCutoff =
-                        activeReport.cardAfterCutoff ?? selectedBusinessDay.cardAfterCutoff ?? 0
                       const expectedZ =
                         activeReport.expectedZ ??
                         selectedBusinessDay.expectedZ ??
-                        roundCurrency(carryIn + beforeCutoff)
+                        activeReport.paymentDistribution.card
                       const enteredZ =
                         activeReport.enteredZ ?? selectedBusinessDay.enteredZ
                       const zDiff =
@@ -844,17 +1021,13 @@ export function ReportsModal({
                             selectedBusinessDay.zDifference ??
                             roundCurrency(enteredZ - expectedZ))
                           : null
-                      const carryOut =
-                        activeReport.cardCarryOut ??
-                        selectedBusinessDay.cardCarryOut ??
-                        afterCutoff
 
                       return (
                         <div className="p-3.5 rounded-xl bg-[#fcfaf7] border border-[#ebe2d9] flex flex-col justify-between">
                           <div className="flex items-center justify-between mb-2">
                             <span className="text-[11px] font-extrabold text-[#5c493d] uppercase flex items-center gap-1.5">
                               <CreditCard size={14} className="text-[#8a6d57]" />
-                              POS Z & Kart Devir ({cutoffTime})
+                              POS Z Raporu Özeti
                             </span>
                             {zDiff !== null ? (
                               <span
@@ -879,25 +1052,14 @@ export function ReportsModal({
                             )}
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="grid grid-cols-3 gap-2 text-xs">
                             <div className="p-2 rounded-lg bg-white border border-[#ebe2d9]">
                               <span className="text-[10px] text-[#8c7a6e] font-bold block">
-                                Önceki Günden Devir
-                              </span>
-                              <strong className="font-extrabold text-[#3b291f]">
-                                {formatCurrency(carryIn)}
-                              </strong>
-                            </div>
-                            <div className="p-2 rounded-lg bg-white border border-[#ebe2d9]">
-                              <span className="text-[10px] text-[#8c7a6e] font-bold block">
-                                Kart Satışı (Toplam)
+                                Kart Satışları (Toplam)
                               </span>
                               <strong className="font-extrabold text-[#3b291f]">
                                 {formatCurrency(activeReport.paymentDistribution.card)}
                               </strong>
-                              <span className="text-[10px] text-stone-500 block truncate">
-                                ↳ {cutoffTime} öncesi: {formatCurrency(beforeCutoff)}
-                              </span>
                             </div>
                             <div className="p-2 rounded-lg bg-white border border-[#ebe2d9]">
                               <span className="text-[10px] text-[#8c7a6e] font-bold block">
@@ -920,11 +1082,6 @@ export function ReportsModal({
                               </strong>
                             </div>
                           </div>
-
-                          <div className="mt-2 pt-2 border-t border-[#ebe2d9] flex items-center justify-between text-[11px] font-bold text-amber-900">
-                            <span>Yarına Devreden ({cutoffTime} sonrası):</span>
-                            <strong className="text-amber-800">{formatCurrency(carryOut)}</strong>
-                          </div>
                         </div>
                       )
                     })()}
@@ -938,11 +1095,11 @@ export function ReportsModal({
                   <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 grid place-items-center mb-2.5">
                     <TrendingUp size={18} />
                   </div>
-                  <div className="text-xs font-bold text-[#8c7a6e]">
+                  <div className="text-xs font-black text-[#6d5a4e]">
                     Toplam Ciro
                   </div>
-                  <div className="text-xl font-extrabold text-[#3b291f] mt-0.5">
-                    {formatCurrency(activeReport.totalRevenue)}
+                  <div className="text-2xl font-black text-[#2d1e15] mt-0.5">
+                    {formatCurrency(activeReport.grossItemsRevenue ?? activeReport.totalRevenue)}
                   </div>
                 </div>
 
@@ -950,23 +1107,23 @@ export function ReportsModal({
                   <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-700 grid place-items-center mb-2.5">
                     <Receipt size={18} />
                   </div>
-                  <div className="text-xs font-bold text-[#8c7a6e]">
+                  <div className="text-xs font-black text-[#6d5a4e]">
                     Sipariş Sayısı
                   </div>
-                  <div className="text-xl font-extrabold text-[#3b291f] mt-0.5">
+                  <div className="text-2xl font-black text-[#2d1e15] mt-0.5">
                     {activeReport.orderCount}
                   </div>
                 </div>
 
                 <div className="bg-white rounded-2xl p-4 border border-[#e6ddd4] shadow-xs">
                   <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-700 grid place-items-center mb-2.5">
-                    <ShoppingBag size={18} />
+                    <Wallet size={18} />
                   </div>
-                  <div className="text-xs font-bold text-[#8c7a6e]">
-                    Ortalama Adisyon
+                  <div className="text-xs font-black text-[#6d5a4e]">
+                    Ödenen Masalar Toplamı
                   </div>
-                  <div className="text-xl font-extrabold text-[#3b291f] mt-0.5">
-                    {formatCurrency(activeReport.averageBasket)}
+                  <div className="text-2xl font-black text-[#2d1e15] mt-0.5">
+                    {formatCurrency(activeReport.paidTablesTotal ?? activeReport.totalRevenue)}
                   </div>
                 </div>
 
@@ -974,10 +1131,10 @@ export function ReportsModal({
                   <div className="w-9 h-9 rounded-xl bg-sky-50 text-sky-700 grid place-items-center mb-2.5">
                     <FileText size={18} />
                   </div>
-                  <div className="text-xs font-bold text-[#8c7a6e]">
+                  <div className="text-xs font-black text-[#6d5a4e]">
                     Toplam KDV (%{taxRate})
                   </div>
-                  <div className="text-xl font-extrabold text-[#3b291f] mt-0.5">
+                  <div className="text-2xl font-black text-[#2d1e15] mt-0.5">
                     {formatCurrency(activeReport.totalTax)}
                   </div>
                 </div>
@@ -986,10 +1143,10 @@ export function ReportsModal({
                   <div className="w-9 h-9 rounded-xl bg-purple-50 text-purple-700 grid place-items-center mb-2.5">
                     <Percent size={18} />
                   </div>
-                  <div className="text-xs font-bold text-[#8c7a6e]">
+                  <div className="text-xs font-black text-[#6d5a4e]">
                     Toplam İndirim
                   </div>
-                  <div className="text-xl font-extrabold text-[#3b291f] mt-0.5">
+                  <div className="text-2xl font-black text-[#2d1e15] mt-0.5">
                     {formatCurrency(activeReport.totalDiscount)}
                   </div>
                 </div>
@@ -998,10 +1155,10 @@ export function ReportsModal({
                   <div className="w-9 h-9 rounded-xl bg-rose-50 text-rose-700 grid place-items-center mb-2.5">
                     <Ban size={18} />
                   </div>
-                  <div className="text-xs font-bold text-[#8c7a6e]">
+                  <div className="text-xs font-black text-[#6d5a4e]">
                     İptal Edilen ({activeReport.cancelledCount})
                   </div>
-                  <div className="text-xl font-extrabold text-rose-700 mt-0.5">
+                  <div className="text-2xl font-black text-rose-700 mt-0.5">
                     {formatCurrency(activeReport.cancelledTotal)}
                   </div>
                 </div>
@@ -1013,10 +1170,10 @@ export function ReportsModal({
                 <div className="bg-white rounded-2xl p-5 border border-[#e6ddd4] shadow-xs">
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <h3 className="text-base font-extrabold text-[#3b291f]">
+                      <h3 className="text-lg font-black text-[#2d1e15]">
                         Ödeme Yöntemlerine Göre Dağılım
                       </h3>
-                      <p className="text-xs text-[#8c7a6e]">
+                      <p className="text-xs font-semibold text-[#6d5a4e]">
                         Adisyonlara uygulanan net tahsilat tutarları
                       </p>
                     </div>
@@ -1024,28 +1181,31 @@ export function ReportsModal({
 
                   <div className="space-y-3.5">
                     {paymentMethodsList.map((m) => {
+                      const totalPaidMethods = roundCurrency(
+                        activeReport.paymentDistribution.card +
+                          activeReport.paymentDistribution.cash +
+                          activeReport.paymentDistribution.iban,
+                      )
                       const pct =
-                        activeReport.totalRevenue > 0
-                          ? roundCurrency(
-                              (m.amount / activeReport.totalRevenue) * 100,
-                            )
+                        totalPaidMethods > 0
+                          ? roundCurrency((m.amount / totalPaidMethods) * 100)
                           : 0
                       return (
                         <div key={m.key} className="space-y-1.5">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold text-[#3b291f] flex items-center gap-2">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-extrabold text-[#2d1e15] flex items-center gap-2">
                               <span
                                 className={`p-1.5 rounded-lg ${m.badgeBg}`}
                               >
-                                <m.icon size={14} />
+                                <m.icon size={15} />
                               </span>
                               {m.label}
                             </span>
                             <div className="flex items-center gap-2">
-                              <span className="px-2 py-0.5 rounded-md bg-stone-100 text-stone-600 font-bold text-[11px]">
+                              <span className="px-2 py-0.5 rounded-md bg-stone-100 text-stone-700 font-extrabold text-xs">
                                 %{pct}
                               </span>
-                              <strong className="text-sm font-extrabold text-[#3b291f]">
+                              <strong className="text-base font-black text-[#2d1e15]">
                                 {formatCurrency(m.amount)}
                               </strong>
                             </div>
@@ -1056,22 +1216,6 @@ export function ReportsModal({
                               style={{ width: `${Math.min(100, pct)}%` }}
                             />
                           </div>
-                          {m.key === 'card' && activeReport.cardBeforeCutoff !== undefined && (
-                            <div className="flex flex-wrap items-center justify-between text-[11px] text-[#8a6d57] pl-7 pt-0.5 font-medium">
-                              <span>
-                                ↳ {activeReport.posZCutoffTime || '23:57'} öncesi (Z Dahil):{' '}
-                                <strong className="text-emerald-700">
-                                  {formatCurrency(activeReport.cardBeforeCutoff)}
-                                </strong>
-                              </span>
-                              <span>
-                                ↳ {activeReport.posZCutoffTime || '23:57'} sonrası (Devreden):{' '}
-                                <strong className="text-amber-700">
-                                  {formatCurrency(activeReport.cardAfterCutoff ?? 0)}
-                                </strong>
-                              </span>
-                            </div>
-                          )}
                         </div>
                       )
                     })}
@@ -1082,36 +1226,36 @@ export function ReportsModal({
                 <div className="bg-white rounded-2xl p-5 border border-[#e6ddd4] shadow-xs">
                   <div className="flex items-center justify-between mb-4">
                     <div>
-                      <h3 className="text-base font-extrabold text-[#3b291f] flex items-center gap-2">
-                        <Layers size={17} className="text-[#8a6d57]" />
+                      <h3 className="text-lg font-black text-[#2d1e15] flex items-center gap-2">
+                        <Layers size={18} className="text-[#8a6d57]" />
                         Kategori Bazlı Satış
                       </h3>
-                      <p className="text-xs text-[#8c7a6e]">
+                      <p className="text-xs font-semibold text-[#6d5a4e]">
                         Ürün kategorilerine göre adet ve ciro dağılımı
                       </p>
                     </div>
                   </div>
 
                   {activeReport.categorySales.length === 0 ? (
-                    <div className="py-8 text-center text-xs font-semibold text-[#8c7a6e]">
+                    <div className="py-8 text-center text-sm font-semibold text-[#8c7a6e]">
                       Bu dönemde henüz kategori satışı bulunmuyor.
                     </div>
                   ) : (
                     <div className="space-y-3">
                       {activeReport.categorySales.map((cat) => (
                         <div key={cat.category} className="space-y-1">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-extrabold text-[#3b291f]">
+                          <div className="flex items-center justify-between text-sm">
+                            <span className="font-black text-[#2d1e15]">
                               {cat.category}{' '}
-                              <span className="text-[#8c7a6e] font-semibold">
+                              <span className="text-[#6d5a4e] font-bold">
                                 ({cat.quantity} adet)
                               </span>
                             </span>
                             <div className="flex items-center gap-2">
-                              <span className="text-[11px] font-bold text-[#8a6d57]">
+                              <span className="text-xs font-extrabold text-[#8a6d57]">
                                 %{cat.share}
                               </span>
-                              <strong className="font-extrabold text-[#3b291f]">
+                              <strong className="font-black text-[#2d1e15] text-base">
                                 {formatCurrency(cat.revenue)}
                               </strong>
                             </div>
@@ -1343,6 +1487,93 @@ export function ReportsModal({
                 )}
               </div>
 
+              {/* Garson / Personel Satış ve Performans Özeti */}
+              <div className="bg-white rounded-2xl p-5 border border-[#e6ddd4] shadow-xs">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-base font-extrabold text-[#3b291f] flex items-center gap-2">
+                      <Users size={17} className="text-[#8a6d57]" />
+                      Garson & Personel Satış Özeti
+                    </h3>
+                    <p className="text-xs text-[#8c7a6e]">
+                      Seçilen iş gününde personellerin eklediği siparişler, tahsil ettiği ödemeler ve iadeler
+                    </p>
+                  </div>
+                </div>
+
+                {waiterSummaryData.length === 0 ? (
+                  <p className="text-xs text-[#8c7a6e] font-medium py-3 text-center">
+                    Bu dönemde henüz personel işlem kaydı bulunmuyor.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-[#fcfaf7] border-b border-[#ebe2d9] text-[11px] font-extrabold text-[#8a6d57] uppercase tracking-wider">
+                          <th className="py-3 px-4">Personel</th>
+                          <th className="py-3 px-4">Rol</th>
+                          <th className="py-3 px-4 text-right">Eklenen Ürün (Adet)</th>
+                          <th className="py-3 px-4 text-right">Toplam Satış</th>
+                          <th className="py-3 px-4 text-right">Tahsil Edilen Ödeme</th>
+                          <th className="py-3 px-4 text-right">Yapılan İade</th>
+                          <th className="py-3 px-4 text-right">Net Tahsilat</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#f2ece6]">
+                        {waiterSummaryData.map((row) => {
+                          const netCollected = roundCurrency(row.paymentAmount - row.refundAmount)
+                          return (
+                            <tr key={row.fullName} className="hover:bg-[#fcfaf7]/70 transition-colors">
+                              <td className="py-3 px-4 font-bold text-[#3b291f]">
+                                {row.fullName}
+                              </td>
+                              <td className="py-3 px-4">
+                                <span
+                                  className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    row.role === 'Garson'
+                                      ? 'bg-amber-100 text-amber-800'
+                                      : 'bg-stone-100 text-stone-700'
+                                  }`}
+                                >
+                                  {row.role}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-right font-medium text-stone-600">
+                                {row.itemCount} adet
+                              </td>
+                              <td className="py-3 px-4 text-right font-bold text-[#3b291f]">
+                                {formatCurrency(row.totalSalesRevenue)}
+                              </td>
+                              <td className="py-3 px-4 text-right font-bold text-teal-700">
+                                {formatCurrency(row.paymentAmount)}{' '}
+                                <span className="text-[10px] text-stone-400 font-normal">
+                                  ({row.paymentCount})
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-right font-bold text-rose-600">
+                                {row.refundAmount > 0 ? (
+                                  <>
+                                    -{formatCurrency(row.refundAmount)}{' '}
+                                    <span className="text-[10px] text-rose-400 font-normal">
+                                      ({row.refundCount})
+                                    </span>
+                                  </>
+                                ) : (
+                                  '0,00 ₺'
+                                )}
+                              </td>
+                              <td className="py-3 px-4 text-right font-black text-amber-900">
+                                {formatCurrency(netCollected)}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
               {/* Saatlik Satış Yoğunluğu */}
               <div className="bg-white rounded-2xl p-5 border border-[#e6ddd4] shadow-xs">
                 <div className="flex items-center justify-between mb-4">
@@ -1450,12 +1681,100 @@ export function ReportsModal({
                 )}
               </div>
 
+              {/* Garson / Personel Satış ve Performans Özeti */}
+              <div className="bg-white rounded-2xl p-5 border border-[#e6ddd4] shadow-xs">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-base font-extrabold text-[#3b291f] flex items-center gap-2">
+                      <Users size={17} className="text-[#8a6d57]" />
+                      Garson & Personel Satış Özeti
+                    </h3>
+                    <p className="text-xs text-[#8c7a6e]">
+                      Seçilen iş gününde personellerin eklediği siparişler, tahsil ettiği ödemeler ve iadeler
+                    </p>
+                  </div>
+                </div>
+
+                {waiterSummaryData.length === 0 ? (
+                  <p className="text-xs text-[#8c7a6e] font-medium py-3 text-center">
+                    Bu dönemde henüz personel işlem kaydı bulunmuyor.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead>
+                        <tr className="bg-[#fcfaf7] border-b border-[#ebe2d9] text-[11px] font-extrabold text-[#8a6d57] uppercase tracking-wider">
+                          <th className="py-3 px-4">Personel</th>
+                          <th className="py-3 px-4">Rol</th>
+                          <th className="py-3 px-4 text-right">Eklenen Ürün (Adet)</th>
+                          <th className="py-3 px-4 text-right">Toplam Satış</th>
+                          <th className="py-3 px-4 text-right">Tahsil Edilen Ödeme</th>
+                          <th className="py-3 px-4 text-right">Yapılan İade</th>
+                          <th className="py-3 px-4 text-right">Net Tahsilat</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#f2ece6]">
+                        {waiterSummaryData.map((row) => {
+                          const netCollected = roundCurrency(row.paymentAmount - row.refundAmount)
+                          return (
+                            <tr key={row.fullName} className="hover:bg-[#fcfaf7]/70 transition-colors">
+                              <td className="py-3 px-4 font-bold text-[#3b291f]">
+                                {row.fullName}
+                              </td>
+                              <td className="py-3 px-4">
+                                <span
+                                  className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    row.role === 'Garson'
+                                      ? 'bg-amber-100 text-amber-800'
+                                      : 'bg-stone-100 text-stone-700'
+                                  }`}
+                                >
+                                  {row.role}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-right font-medium text-stone-600">
+                                {row.itemCount} adet
+                              </td>
+                              <td className="py-3 px-4 text-right font-bold text-[#3b291f]">
+                                {formatCurrency(row.totalSalesRevenue)}
+                              </td>
+                              <td className="py-3 px-4 text-right font-bold text-teal-700">
+                                {formatCurrency(row.paymentAmount)}{' '}
+                                <span className="text-[10px] text-stone-400 font-normal">
+                                  ({row.paymentCount})
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 text-right font-bold text-rose-600">
+                                {row.refundAmount > 0 ? (
+                                  <>
+                                    -{formatCurrency(row.refundAmount)}{' '}
+                                    <span className="text-[10px] text-rose-400 font-normal">
+                                      ({row.refundCount})
+                                    </span>
+                                  </>
+                                ) : (
+                                  '0,00 ₺'
+                                )}
+                              </td>
+                              <td className="py-3 px-4 text-right font-black text-amber-900">
+                                {formatCurrency(netCollected)}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
               {/* Fiş Geçmişi (Individual Completed Orders) */}
               {receiptsData.total > 0 && (
                 <ReceiptsTable
                   data={receiptsData}
                   isLoading={false}
                   onPageChange={setReceiptPage}
+                  onReopenOrder={canReopen ? onReopenOrder : undefined}
                 />
               )}
             </div>

@@ -1,12 +1,12 @@
 import React, { useState } from 'react'
-import { AlertCircle, AlertTriangle, Banknote, Calendar, CreditCard, RotateCcw, Sun, User, X } from 'lucide-react'
+import { AlertCircle, Banknote, Calendar, Sun, User, X } from 'lucide-react'
 import { formatCurrency, roundCurrency } from '../lib/format'
 
 export interface OpenDayParams {
   openingCash: number
-  cardCarryIn: number
-  cardCarryInAuto: number
-  cardCarryInOverridden: boolean
+  cardCarryIn?: number
+  cardCarryInAuto?: number
+  cardCarryInOverridden?: boolean
   note?: string
 }
 
@@ -24,23 +24,10 @@ interface OpenDayModalProps {
 export function OpenDayModal({
   isOpen,
   cashierName,
-  previousDayCarryOut = 0,
-  hasPreviousClosedDay = false,
-  previousDayNeverClosed = false,
-  posZCutoffTime = '23:57',
   onClose,
   onOpenDay,
 }: OpenDayModalProps) {
-  const autoCarryIn = roundCurrency(previousDayCarryOut)
-
-  const formatAmountInput = (val: number): string => {
-    if (val === 0) return '0'
-    return val.toFixed(2).replace('.', ',').replace(/,00$/, '')
-  }
-
   const [openingCashInput, setOpeningCashInput] = useState('0')
-  const [cardCarryInInput, setCardCarryInInput] = useState(() => formatAmountInput(autoCarryIn))
-  const [isCardOverridden, setIsCardOverridden] = useState(false)
   const [note, setNote] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -48,8 +35,6 @@ export function OpenDayModal({
 
   const handleClose = () => {
     setOpeningCashInput('0')
-    setCardCarryInInput(formatAmountInput(autoCarryIn))
-    setIsCardOverridden(false)
     setNote('')
     setIsSubmitting(false)
     onClose()
@@ -72,26 +57,7 @@ export function OpenDayModal({
   const isCashInvalid =
     Number.isNaN(parsedCash) || parsedCash < 0 || !isValidMoneyDecimals(openingCashInput)
 
-  const parsedCard = parseMoney(cardCarryInInput)
-  const isCardInvalid =
-    Number.isNaN(parsedCard) || parsedCard < 0 || !isValidMoneyDecimals(cardCarryInInput)
-
-  const isFormInvalid = isCashInvalid || isCardInvalid
-
-  const handleCardInputChange = (val: string) => {
-    setCardCarryInInput(val)
-    const num = parseMoney(val)
-    if (!Number.isNaN(num)) {
-      setIsCardOverridden(num !== autoCarryIn)
-    } else {
-      setIsCardOverridden(true)
-    }
-  }
-
-  const handleResetCardToAuto = () => {
-    setCardCarryInInput(formatAmountInput(autoCarryIn))
-    setIsCardOverridden(false)
-  }
+  const isFormInvalid = isCashInvalid
 
   const dateTimeFormatted = new Intl.DateTimeFormat('tr-TR', {
     day: '2-digit',
@@ -109,9 +75,9 @@ export function OpenDayModal({
     setIsSubmitting(true)
     onOpenDay({
       openingCash: parsedCash,
-      cardCarryIn: parsedCard,
-      cardCarryInAuto: autoCarryIn,
-      cardCarryInOverridden: isCardOverridden,
+      cardCarryIn: 0,
+      cardCarryInAuto: 0,
+      cardCarryInOverridden: false,
       note: note.trim() || undefined,
     })
     handleClose()
@@ -168,19 +134,6 @@ export function OpenDayModal({
             </div>
           </div>
 
-          {/* Warning if previous day was never closed properly */}
-          {previousDayNeverClosed && (
-            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-start gap-2">
-              <AlertTriangle size={15} className="text-amber-600 shrink-0 mt-0.5" />
-              <div>
-                <strong className="block font-bold">Önceki gün kapatılmamış</strong>
-                <span>
-                  Önceki iş gününün Z raporu kapatılmamış görünüyor. Lütfen POS cihazınızın devir tutarını kontrol edip elle giriniz.
-                </span>
-              </div>
-            </div>
-          )}
-
           {/* Section 1: Cash Opening Balance */}
           <div>
             <label
@@ -234,92 +187,15 @@ export function OpenDayModal({
             </div>
           </div>
 
-          {/* Section 2: Card (POS) Opening Carry-Over */}
-          <div className="pt-3 border-t border-[#dfd5cc]/70">
-            <div className="flex items-center justify-between mb-1.5">
-              <label
-                htmlFor="opening-card-input"
-                className="block text-xs font-extrabold text-[#5c493d]"
-              >
-                Kart (POS) devir tutarı (₺)
-              </label>
-              {isCardOverridden && (
-                <div className="flex items-center gap-1.5">
-                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                    Düzenlendi
-                  </span>
-                  <button
-                    type="button"
-                    onClick={handleResetCardToAuto}
-                    className="text-[11px] font-extrabold text-[#8a6d57] hover:text-[#3b2b21] flex items-center gap-1 underline transition-colors"
-                  >
-                    <RotateCcw size={11} />
-                    <span>Otomatiğe dön</span>
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="relative flex items-center">
-              <CreditCard
-                size={18}
-                className="absolute left-3.5 text-[#8a6d57] pointer-events-none"
-              />
-              <input
-                id="opening-card-input"
-                type="text"
-                inputMode="decimal"
-                value={cardCarryInInput}
-                onFocus={(e) => e.target.select()}
-                onChange={(e) => handleCardInputChange(e.target.value)}
-                placeholder="0,00"
-                style={{ paddingLeft: '42px' }}
-                className={`cash-input w-full text-base ${
-                  isCardInvalid ? 'input-error' : ''
-                }`}
-              />
-            </div>
-
-            {isCardInvalid ? (
-              <p className="payment-validation-msg mt-1.5">
-                <AlertCircle size={13} />
-                Lütfen 0 veya daha büyük, en fazla 2 basamaklı geçerli bir kart tutarı girin.
-              </p>
-            ) : (
-              <div className="mt-1.5 text-xs text-[#6d5a4e]">
-                <span>Önceki günden devreden kart tutarı: </span>
-                <strong className="text-[#3b2b21]">{formatCurrency(autoCarryIn)}</strong>
-              </div>
-            )}
-
-            <p className="text-[11px] text-[#8a6d57] mt-1">
-              {hasPreviousClosedDay
-                ? `Önceki günün ${posZCutoffTime} sonrası kart satışlarından otomatik hesaplandı.`
-                : 'Önceki iş günü bulunamadı (₺0,00 varsayıldı).'}
-            </p>
-          </div>
-
-          {/* Info Card Row: Showing both Cash and Card Opening */}
+          {/* Summary Box */}
           {!isFormInvalid && (
-            <div className="p-3.5 rounded-xl bg-[#fcfaf7] border border-[#dfd5cc] space-y-2">
+            <div className="p-3.5 rounded-xl bg-[#fcfaf7] border border-[#dfd5cc]">
               <div className="flex items-center justify-between text-xs text-[#6d5a4e]">
                 <span className="flex items-center gap-1.5">
-                  <Banknote size={13} className="text-[#8a6d57]" />
-                  <span>Kasa başlangıç bakiyesi (nakit):</span>
+                  <Banknote size={14} className="text-[#8a6d57]" />
+                  <span className="font-bold">Kasa başlangıç nakit bakiyesi:</span>
                 </span>
-                <strong className="text-[#3b2b21] font-extrabold">{formatCurrency(parsedCash)}</strong>
-              </div>
-              <div className="flex items-center justify-between text-xs text-[#6d5a4e] pt-2 border-t border-[#dfd5cc]/60">
-                <span className="flex items-center gap-1.5">
-                  <CreditCard size={13} className="text-[#8a6d57]" />
-                  <span>Kart devir tutarı:</span>
-                  {isCardOverridden && (
-                    <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">
-                      Düzenlendi
-                    </span>
-                  )}
-                </span>
-                <strong className="text-[#3b2b21] font-extrabold">{formatCurrency(parsedCard)}</strong>
+                <strong className="text-[#3b2b21] font-extrabold text-sm">{formatCurrency(parsedCash)}</strong>
               </div>
             </div>
           )}

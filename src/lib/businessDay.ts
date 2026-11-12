@@ -6,12 +6,28 @@ import type {
   CategorySalesItem,
   CompletedOrder,
   HourlySalesItem,
+  Refund,
   SelectedOption,
   SoldProductOptionBreakdown,
   SoldProductReportItem,
   Table,
 } from '../types'
-import { formatCurrency, getLineAfterItemDiscount, isTableOccupied, roundCurrency } from './format'
+import { formatCurrency, getEffectivePrice, getLineAfterItemDiscount, isTableOccupied, roundCurrency } from './format'
+
+import { getRefundsSafe, saveRefundsSafe } from './storage'
+
+export function getStoredRefunds(): Refund[] {
+  return getRefundsSafe()
+}
+
+export function saveStoredRefund(refund: Refund): void {
+  try {
+    const current = getRefundsSafe()
+    saveRefundsSafe([refund, ...current])
+  } catch (err) {
+    console.error('Failed to save refund', err)
+  }
+}
 
 export interface DayCardBreakdown {
   totalCard: number
@@ -96,6 +112,48 @@ export function createIstanbulDate(
 }
 
 /**
+ * Formats a Date as YYYY-MM-DD in Europe/Istanbul timezone.
+ */
+export function formatIstanbulDateString(date: Date): string {
+  const p = getIstanbulParts(date)
+  return `${p.year}-${String(p.month).padStart(2, '0')}-${String(p.day).padStart(2, '0')}`
+}
+
+/**
+ * Parses a YYYY-MM-DD string into start/end Date bounds in Europe/Istanbul timezone (inclusive).
+ */
+export function getIstanbulDayBounds(
+  ymd: string,
+): { start: Date; end: Date } | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd.trim())
+  if (!match) return null
+  const year = parseInt(match[1], 10)
+  const month = parseInt(match[2], 10)
+  const day = parseInt(match[3], 10)
+  const start = createIstanbulDate(year, month, day, 0, 0, 0)
+  const endSec = createIstanbulDate(year, month, day, 23, 59, 59)
+  return { start, end: new Date(endSec.getTime() + 999) }
+}
+
+/**
+ * Girilen ürünlerin indirim öncesi brüt fiyat toplamını hesaplar:
+ * aktif adet × (birim fiyat + opsiyon/varyant farkları).
+ * İptal/iade edilen ürünler ve iade edilen adetler dahil edilmez.
+ * Not: İndirim varsa koddaki mevcut subtotal mantığına paralel olarak brüt (indirim öncesi) ürün toplamı esas alınır.
+ */
+export const calculateCartItemsGrossRevenue = (items: CartItem[] = []): number => {
+  let total = 0
+  for (const item of items) {
+    if (item.status === 'refunded' && !item.refundedQty) continue
+    const effectiveQty = Math.max(0, item.quantity - (item.refundedQty || 0))
+    if (effectiveQty <= 0) continue
+    const unitPrice = getEffectivePrice(item)
+    total = roundCurrency(total + unitPrice * effectiveQty)
+  }
+  return total
+}
+
+/**
  * Determines the Z-report cutoff Date for a given business day openedAt timestamp.
  * If the day was opened after or at the cutoff time on that calendar day,
  * the cutoff belongs to the next calendar day.
@@ -170,36 +228,29 @@ export const getOrderAppliedPayments = (
 }
 
 /**
- * Calculates card payments split before and after the Z-report cutoff for a business day.
+ * Calculates total card payments and expected POS Z report for a business day.
+ * Devir YOK: All payments taken while the business day is open belong 100% to this day,
+ * regardless of calendar time or midnight/23:57 cutoff.
  */
 export const calculateDayCardBreakdown = (
   day: BusinessDay,
   orders: CompletedOrder[],
   tables?: Table[],
-  fallbackCutoffTime = '23:57',
+  _fallbackCutoffTime = '23:57',
 ): DayCardBreakdown => {
-  const cutoffTime = day.posZCutoffTime || fallbackCutoffTime || '23:57'
-  const cutoffDate = getDayCutoffDate(day.openedAt, cutoffTime)
-  const cutoffMs = cutoffDate.getTime()
+  let totalCard = 0
 
-  // Collect card payments
-  const cardItems: { amount: number; timeMs: number }[] = []
-
-  const dayOrders = orders.filter((o) => o.businessDayId === day.id && !o.cancelled)
+  const dayOrders = orders.filter((o) => o.businessDayId === day.id && !o.cancelled && !o.reopened)
 
   for (const o of dayOrders) {
     if (o.payments && o.payments.length > 0) {
       for (const p of o.payments) {
         if (p.method === 'card') {
-          const amt = roundCurrency(p.amount)
-          const time = new Date(p.createdAt || o.date).getTime()
-          cardItems.push({ amount: amt, timeMs: Number.isNaN(time) ? 0 : time })
+          totalCard = roundCurrency(totalCard + p.amount)
         }
       }
     } else if (o.paymentMethod === 'card') {
-      const amt = roundCurrency(o.totals?.total ?? 0)
-      const time = new Date(o.date).getTime()
-      cardItems.push({ amount: amt, timeMs: Number.isNaN(time) ? 0 : time })
+      totalCard = roundCurrency(totalCard + (o.totals?.total ?? 0))
     }
   }
 
@@ -209,39 +260,21 @@ export const calculateDayCardBreakdown = (
       for (const p of t.payments) {
         if (p.businessDayId && p.businessDayId !== day.id) continue
         if (p.method === 'card') {
-          const amt = roundCurrency(p.amount)
-          const time = new Date(p.createdAt).getTime()
-          cardItems.push({ amount: amt, timeMs: Number.isNaN(time) ? 0 : time })
+          totalCard = roundCurrency(totalCard + p.amount)
         }
       }
     }
   }
 
-  let cardBeforeCutoff = 0
-  let cardAfterCutoff = 0
-
-  for (const item of cardItems) {
-    // timestamp < cutoff is before, >= cutoff is after
-    if (item.timeMs < cutoffMs) {
-      cardBeforeCutoff = roundCurrency(cardBeforeCutoff + item.amount)
-    } else {
-      cardAfterCutoff = roundCurrency(cardAfterCutoff + item.amount)
+  // Deduct card refunds for this business day
+  const storedRefunds = getStoredRefunds().filter((r) => r.businessDayId === day.id)
+  for (const r of storedRefunds) {
+    if (r.paymentMethod === 'card') {
+      totalCard = Math.max(0, roundCurrency(totalCard - r.amount))
     }
   }
 
-  // If the day is already closed with persisted card values, prefer those for exact historical fidelity
-  if (day.status === 'closed' && typeof day.cardBeforeCutoff === 'number') {
-    cardBeforeCutoff = day.cardBeforeCutoff
-    cardAfterCutoff = day.cardAfterCutoff ?? cardAfterCutoff
-  }
-
-  const totalCard = roundCurrency(cardBeforeCutoff + cardAfterCutoff)
-  const cardCarryOut = day.status === 'closed' && typeof day.cardCarryOut === 'number'
-    ? day.cardCarryOut
-    : cardAfterCutoff
-  const cardCarryIn = roundCurrency(day.cardCarryIn ?? 0)
-  const expectedZ = roundCurrency(cardCarryIn + cardBeforeCutoff)
-
+  const expectedZ = totalCard
   let enteredZ: number | undefined
   let zDifference: number | undefined
 
@@ -252,15 +285,15 @@ export const calculateDayCardBreakdown = (
 
   return {
     totalCard,
-    cardBeforeCutoff,
-    cardAfterCutoff,
-    cardCarryIn,
-    cardCarryOut,
+    cardBeforeCutoff: totalCard,
+    cardAfterCutoff: 0,
+    cardCarryIn: 0,
+    cardCarryOut: 0,
     expectedZ,
     enteredZ,
     zDifference,
-    posZCutoffTime: cutoffTime,
-    cutoffDate,
+    posZCutoffTime: 'Yok (Tüm Gün)',
+    cutoffDate: new Date(day.openedAt),
   }
 }
 
@@ -320,11 +353,14 @@ export const buildReportFromOrders = (
   defaultTaxRate = 10,
   tables?: Table[],
   openBusinessDayId?: string,
+  passedRefunds?: Refund[],
+  options?: { dateRange?: { start: Date; end: Date }; legacyOnly?: boolean },
 ): BusinessDayReportSnapshot => {
-  const validOrders = orders.filter((o) => !o.cancelled)
+  const validOrders = orders.filter((o) => !o.cancelled && !o.reopened)
   const cancelledOrdersRaw = orders.filter((o) => Boolean(o.cancelled))
 
   let totalRevenue = 0
+  let grossItemsRevenue = 0
   let totalDiscount = 0
   let totalTax = 0
   let cardTotal = 0
@@ -356,6 +392,9 @@ export const buildReportFromOrders = (
     const orderRev = applied.total
 
     totalRevenue = roundCurrency(totalRevenue + orderRev)
+    grossItemsRevenue = roundCurrency(
+      grossItemsRevenue + calculateCartItemsGrossRevenue(order.items),
+    )
     cardTotal = roundCurrency(cardTotal + applied.card)
     cashTotal = roundCurrency(cashTotal + applied.cash)
     ibanTotal = roundCurrency(ibanTotal + applied.iban)
@@ -376,8 +415,13 @@ export const buildReportFromOrders = (
 
     const lineNets = getOrderItemNetRevenues(order.items, orderRev)
     order.items.forEach((item, idx) => {
-      const lineRev = lineNets[idx] ?? 0
-      const qty = item.quantity
+      if (item.status === 'refunded' && !item.refundedQty) return
+      const effectiveQty = Math.max(0, item.quantity - (item.refundedQty || 0))
+      if (effectiveQty <= 0) return
+
+      const rawLineRev = lineNets[idx] ?? 0
+      const lineRev = item.quantity > 0 ? roundCurrency((rawLineRev / item.quantity) * effectiveQty) : 0
+      const qty = effectiveQty
       const productKey = item.id || item.name
       const categoryName = item.category || 'Diğer'
 
@@ -425,8 +469,57 @@ export const buildReportFromOrders = (
     })
   }
 
+  // Açık masalardaki (kapanmamış / ödemesi alınmamış) ürünlerin brüt toplamını da Toplam Ciro'ya ekle
+  if (tables && tables.length > 0) {
+    for (const t of tables) {
+      if (!isTableOccupied(t) && t.cart.length === 0) continue
+      if (options?.dateRange) {
+        const { start, end } = options.dateRange
+        const itemsInRange = t.cart.filter((item) => {
+          const itemDate = item.addedAt ? new Date(item.addedAt) : new Date()
+          return itemDate >= start && itemDate <= end
+        })
+        grossItemsRevenue = roundCurrency(
+          grossItemsRevenue + calculateCartItemsGrossRevenue(itemsInRange),
+        )
+      } else {
+        grossItemsRevenue = roundCurrency(
+          grossItemsRevenue + calculateCartItemsGrossRevenue(t.cart),
+        )
+      }
+    }
+  }
+
+  // Deduct refunds from revenue and payment method breakdown
+  const allRefunds = passedRefunds ?? getStoredRefunds()
+  const relevantRefunds = allRefunds.filter((r) => {
+    if (openBusinessDayId) return r.businessDayId === openBusinessDayId
+    if (options?.dateRange) {
+      const refTime = r.refundedAt || r.createdAt
+      if (!refTime) return false
+      const d = new Date(refTime)
+      return d >= options.dateRange.start && d <= options.dateRange.end
+    }
+    if (options?.legacyOnly) return !r.businessDayId
+    return true
+  })
+
+  let totalRefunds = 0
+  for (const r of relevantRefunds) {
+    const amt = roundCurrency(r.amount)
+    totalRefunds = roundCurrency(totalRefunds + amt)
+    if (r.paymentMethod === 'card') {
+      cardTotal = Math.max(0, roundCurrency(cardTotal - amt))
+    } else if (r.paymentMethod === 'iban') {
+      ibanTotal = Math.max(0, roundCurrency(ibanTotal - amt))
+    } else {
+      cashTotal = Math.max(0, roundCurrency(cashTotal - amt))
+    }
+  }
+
+  const netRevenue = Math.max(0, roundCurrency(totalRevenue - totalRefunds))
+
   const orderCount = validOrders.length
-  const averageBasket = orderCount > 0 ? roundCurrency(totalRevenue / orderCount) : 0
 
   const soldProducts: SoldProductReportItem[] = Array.from(productMap.values())
     .map((p) => ({
@@ -483,9 +576,12 @@ export const buildReportFromOrders = (
 
   return {
     generatedAt: new Date().toISOString(),
-    totalRevenue,
+    totalRevenue: netRevenue,
+    grossItemsRevenue,
+    paidTablesTotal: netRevenue,
+    totalRefunds,
+    refundCount: relevantRefunds.length,
     orderCount,
-    averageBasket,
     totalTax,
     totalDiscount,
     cancelledCount: cancelledOrders.length,
@@ -521,8 +617,23 @@ export const getReportForBusinessDay = (
   )
 
   if (day.status === 'closed' && day.report) {
+    const dayValidOrders = allOrders.filter(
+      (o) => o.businessDayId === day.id && !o.cancelled && !o.reopened,
+    )
+    const fallbackGrossItems =
+      dayValidOrders.length > 0
+        ? roundCurrency(
+            dayValidOrders.reduce(
+              (sum, o) => sum + calculateCartItemsGrossRevenue(o.items),
+              0,
+            ),
+          )
+        : day.report.totalRevenue
+
     return {
       ...day.report,
+      grossItemsRevenue: day.report.grossItemsRevenue ?? fallbackGrossItems,
+      paidTablesTotal: day.report.paidTablesTotal ?? day.report.totalRevenue,
       cardCarryIn: day.report.cardCarryIn ?? day.cardCarryIn ?? cardBreakdown.cardCarryIn,
       cardBeforeCutoff:
         day.report.cardBeforeCutoff ?? day.cardBeforeCutoff ?? cardBreakdown.cardBeforeCutoff,
@@ -590,11 +701,12 @@ export const exportReportToCsv = (
 
   rows.push([])
   rows.push(['GENEL ÖZET', 'DEĞER'])
-  rows.push(['Toplam Ciro (TL)', formatNum(report.totalRevenue)])
+  rows.push(['Toplam Ciro (TL)', formatNum(report.grossItemsRevenue ?? report.totalRevenue)])
   rows.push(['Sipariş Sayısı', String(report.orderCount)])
-  rows.push(['Ortalama Adisyon (TL)', formatNum(report.averageBasket)])
+  rows.push(['Ödenen Masalar Toplamı (TL)', formatNum(report.paidTablesTotal ?? report.totalRevenue)])
   rows.push(['Toplam KDV (TL)', formatNum(report.totalTax)])
   rows.push(['Toplam İndirim (TL)', formatNum(report.totalDiscount)])
+  rows.push(['Toplam İade (TL)', formatNum(report.totalRefunds || 0)])
   rows.push(['İptal Edilen Sipariş Sayısı', String(report.cancelledCount)])
   rows.push(['İptal Edilen Tutar (TL)', formatNum(report.cancelledTotal)])
 
@@ -630,21 +742,11 @@ export const exportReportToCsv = (
       rows.push(['Kasa Farkı', formatNum(day.cashDifference ?? day.countedCash - expected)])
     }
 
-    const cutoffTime = day.posZCutoffTime || report.posZCutoffTime || '23:57'
-    const carryIn = report.cardCarryIn ?? day.cardCarryIn ?? 0
-    const beforeCutoff =
-      report.cardBeforeCutoff ?? day.cardBeforeCutoff ?? report.paymentDistribution.card
-    const afterCutoff = report.cardAfterCutoff ?? day.cardAfterCutoff ?? 0
-    const expectedZ =
-      report.expectedZ ?? day.expectedZ ?? roundCurrency(carryIn + beforeCutoff)
-    const carryOut = report.cardCarryOut ?? day.cardCarryOut ?? afterCutoff
+    const expectedZ = report.expectedZ ?? day.expectedZ ?? report.paymentDistribution.card
 
     rows.push([])
-    rows.push(['POS Z RAPORU & KART DEVİR ÖZETİ', 'TUTAR (TL)'])
-    rows.push(['Önceki Günden Devreden Kart', formatNum(carryIn)])
+    rows.push(['POS Z RAPORU ÖZETİ', 'TUTAR (TL)'])
     rows.push(['Kart Satışları (Toplam)', formatNum(report.paymentDistribution.card)])
-    rows.push([`↳ ${cutoffTime} Öncesi (Z Raporuna Dahil)`, formatNum(beforeCutoff)])
-    rows.push([`↳ ${cutoffTime} Sonrası (Yarına Devreder)`, formatNum(afterCutoff)])
     rows.push(['Beklenen POS Z Raporu', formatNum(expectedZ)])
     const enteredZVal = report.enteredZ ?? day.enteredZ
     if (typeof enteredZVal === 'number') {
@@ -653,7 +755,6 @@ export const exportReportToCsv = (
       rows.push(['Fişteki POS Z Raporu', formatNum(enteredZVal)])
       rows.push(['POS Z Raporu Farkı', formatNum(zDiffVal)])
     }
-    rows.push(['Yarına Devreden Kart Tutarı', formatNum(carryOut)])
   }
 
   rows.push([])

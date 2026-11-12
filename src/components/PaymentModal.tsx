@@ -13,6 +13,7 @@ import {
   Plus,
   RotateCcw,
   ShoppingBag,
+  Tag,
   Users,
   X,
 } from 'lucide-react'
@@ -23,8 +24,10 @@ import {
   derivePaymentState,
   formatCurrency,
   formatIban,
+  formatTime,
   paymentMethodLabel,
   roundCurrency,
+  sanitizeDecimalInput,
   validateTurkishIban,
 } from '../lib/format'
 import { generateUUID } from '../lib/uuid'
@@ -34,7 +37,9 @@ import type {
   OrderTotals,
   PartialPayment,
   PaymentMethod,
+  Session,
 } from '../types'
+import { can } from '../lib/permissions'
 import { ReceiptPreview } from './ReceiptPreview'
 
 const DEFAULT_IBAN_PLACEHOLDER = 'TR00 0000 0000 0000 0000 0000 00'
@@ -43,6 +48,8 @@ interface PaymentModalProps {
   cart: CartItem[]
   customerName?: string
   discountRate: number
+  discountAmount?: number
+  onApplyDiscountAmount?: (amount: number) => void
   isOpen: boolean
   note: string
   onClose: () => void
@@ -55,12 +62,15 @@ interface PaymentModalProps {
   payments: PartialPayment[]
   settings: AppSettings
   totals: OrderTotals
+  currentSession?: Session | null
 }
 
 export function PaymentModal({
   cart,
   customerName,
   discountRate,
+  discountAmount = 0,
+  onApplyDiscountAmount,
   isOpen,
   note,
   onClose,
@@ -72,10 +82,23 @@ export function PaymentModal({
   payments,
   settings,
   totals,
+  currentSession,
 }: PaymentModalProps) {
-  const [method, setMethod] = useState<'card' | 'cash' | 'iban'>('cash')
+  const canCash = can(currentSession, 'payment_cash', settings)
+  const canCard = can(currentSession, 'payment_card', settings)
+  const canIban = can(currentSession, 'payment_iban', settings)
+  const canPartial = can(currentSession, 'payment_partial', settings)
+  const canCustomAmount = can(currentSession, 'payment_custom_amount', settings)
+
+  const defaultMethod = useMemo<'card' | 'cash' | 'iban'>(() => {
+    if (canCash) return 'cash'
+    if (canCard) return 'card'
+    if (canIban) return 'iban'
+    return 'cash'
+  }, [canCash, canCard, canIban])
+
+  const [method, setMethod] = useState<'card' | 'cash' | 'iban'>(defaultMethod)
   const [customAmountInput, setCustomAmountInput] = useState<string | null>(null)
-  const [cashReceived, setCashReceived] = useState('')
   const [processing, setProcessing] = useState(false)
   const [showReceipt, setShowReceipt] = useState(false)
   const [feedback, setFeedback] = useState<string | null>(null)
@@ -84,14 +107,19 @@ export function PaymentModal({
   const [splitCount, setSplitCount] = useState<number | null>(null)
   const [selectedQuantities, setSelectedQuantities] = useState<Record<string, number>>({})
   const [itemsCollapsedMobile, setItemsCollapsedMobile] = useState(false)
+  const [showDiscountEditor, setShowDiscountEditor] = useState(false)
+  const [discountMode, setDiscountMode] = useState<'amount' | 'net' | 'percent'>('amount')
+  const [discountInput, setDiscountInput] = useState('')
 
   const grandTotal = roundCurrency(totals.total)
+  const baseTotalBeforePaymentDiscount = roundCurrency(grandTotal + discountAmount)
   const { paidTotal, remaining } = derivePaymentState(grandTotal, payments)
+  const maxApplicableDiscount = Math.max(0, roundCurrency(baseTotalBeforePaymentDiscount - paidTotal))
   const hasPartialPayments = payments.length > 0
 
   const lineStates = useMemo(
-    () => deriveLinePaymentStates(cart, discountRate, payments),
-    [cart, discountRate, payments],
+    () => deriveLinePaymentStates(cart, discountRate, payments, discountAmount),
+    [cart, discountRate, payments, discountAmount],
   )
 
   // Sanitize selection so it never exceeds current unpaidQty of any line
@@ -134,21 +162,26 @@ export function PaymentModal({
   const formatInputVal = (val: number) =>
     val.toFixed(2).replace('.', ',').replace(/,00$/, '')
 
-  const amountInput = hasItemSelection
-    ? formatInputVal(selectedPayment.totalAmount)
-    : (customAmountInput ?? formatInputVal(remaining))
+  const amountInput =
+    customAmountInput !== null
+      ? customAmountInput
+      : hasItemSelection
+        ? formatInputVal(selectedPayment.totalAmount)
+        : formatInputVal(remaining)
 
   const handleClose = () => {
     setProcessing(false)
     setShowReceipt(false)
     setMethod('cash')
-    setCashReceived('')
     setCustomAmountInput(null)
     setFeedback(null)
     setConfirmUndo(false)
     setSplitCount(null)
     setSelectedQuantities({})
     setItemsCollapsedMobile(false)
+    setShowDiscountEditor(false)
+    setDiscountInput('')
+    setDiscountMode('amount')
     onClose()
   }
 
@@ -158,27 +191,92 @@ export function PaymentModal({
     return Number.isFinite(num) ? roundCurrency(num) : 0
   }
 
-  const amountToPay = hasItemSelection ? selectedPayment.totalAmount : parseAmount(amountInput)
+  const parsedDiscountInput = parseAmount(discountInput)
+  const candidateDiscountAmount = useMemo(() => {
+    if (discountInput.trim() === '') return 0
+    if (discountMode === 'amount') return parsedDiscountInput
+    if (discountMode === 'net') return roundCurrency(baseTotalBeforePaymentDiscount - parsedDiscountInput)
+    return roundCurrency(baseTotalBeforePaymentDiscount * (parsedDiscountInput / 100))
+  }, [discountInput, discountMode, parsedDiscountInput, baseTotalBeforePaymentDiscount])
+
+  const discountError = useMemo(() => {
+    if (discountInput.trim() === '') return null
+    if (discountMode === 'percent' && (parsedDiscountInput < 0 || parsedDiscountInput > 100)) {
+      return 'İndirim oranı %0 ile %100 arasında olmalıdır.'
+    }
+    if (discountMode === 'net' && parsedDiscountInput > baseTotalBeforePaymentDiscount + 0.001) {
+      return `Net tutar mevcut toplamdan (${formatCurrency(baseTotalBeforePaymentDiscount)}) büyük olamaz.`
+    }
+    if (discountMode === 'net' && parsedDiscountInput < paidTotal - 0.001) {
+      return `Net tutar ödenmiş tutardan (${formatCurrency(paidTotal)}) az olamaz.`
+    }
+    if (candidateDiscountAmount < 0) {
+      return 'İndirim tutarı negatif olamaz.'
+    }
+    if (candidateDiscountAmount > maxApplicableDiscount + 0.001) {
+      return `En fazla ${formatCurrency(maxApplicableDiscount)} indirim uygulanabilir.`
+    }
+    return null
+  }, [
+    discountInput,
+    discountMode,
+    parsedDiscountInput,
+    baseTotalBeforePaymentDiscount,
+    paidTotal,
+    candidateDiscountAmount,
+    maxApplicableDiscount,
+  ])
+
+  const previewNewTotal = Math.max(
+    paidTotal,
+    roundCurrency(baseTotalBeforePaymentDiscount - Math.min(candidateDiscountAmount, maxApplicableDiscount)),
+  )
+
+  const handleOpenDiscountEditor = () => {
+    setDiscountMode('amount')
+    setDiscountInput(discountAmount > 0 ? formatInputVal(discountAmount) : '')
+    setShowDiscountEditor(true)
+  }
+
+  const handleApplyDiscount = () => {
+    if (!onApplyDiscountAmount || discountError) return
+    const nextDiscount =
+      discountInput.trim() === ''
+        ? 0
+        : Math.min(maxApplicableDiscount, Math.max(0, roundCurrency(candidateDiscountAmount)))
+    onApplyDiscountAmount(nextDiscount)
+    setCustomAmountInput(null)
+    setSplitCount(null)
+    setShowDiscountEditor(false)
+    setDiscountInput('')
+  }
+
+  const handleClearDiscount = () => {
+    if (!onApplyDiscountAmount) return
+    onApplyDiscountAmount(0)
+    setCustomAmountInput(null)
+    setSplitCount(null)
+    setShowDiscountEditor(false)
+    setDiscountInput('')
+  }
+
+  const amountToPay = parseAmount(amountInput)
   const isAmountZeroOrEmpty = amountInput.trim() === '' || amountToPay <= 0
   const isAmountExceeding = amountToPay > roundCurrency(remaining + 0.001)
   const isAmountValid = !isAmountZeroOrEmpty && !isAmountExceeding
 
-  const appliedAmount = isAmountValid ? Math.min(amountToPay, remaining) : 0
-  const cashValue = cashReceived.trim() === '' ? 0 : parseAmount(cashReceived)
-  const effectiveCashReceived = cashReceived.trim() === '' ? appliedAmount : cashValue
-  const isCashInsufficient =
-    method === 'cash' && cashReceived.trim() !== '' && roundCurrency(cashValue + 0.001) < appliedAmount
-  const change =
-    method === 'cash' ? Math.max(0, roundCurrency(effectiveCashReceived - appliedAmount)) : 0
+  // İŞ 2: Kullanıcı tutarı seçili ürün toplamından farklı girdiyse tutar bazlı kısmi ödeme uygulanır
+  const isManualAmountWithSelection =
+    hasItemSelection && Math.abs(amountToPay - selectedPayment.totalAmount) >= 0.005
 
-  const canConfirm =
-    isAmountValid &&
-    remaining > 0 &&
-    (method !== 'cash' || roundCurrency(effectiveCashReceived + 0.001) >= appliedAmount)
+  const appliedAmount = isAmountValid ? Math.min(amountToPay, remaining) : 0
+
+  const canConfirm = isAmountValid && remaining > 0
 
   const title = showReceipt ? 'Fiş Önizleme' : paidMethod ? 'Ödeme Başarılı' : 'Ödeme Al'
 
   const handleToggleLine = (cartItemId: string, unpaidQty: number) => {
+    if (!canPartial) return
     if (unpaidQty <= 0) return
     setSplitCount(null)
     setCustomAmountInput(null)
@@ -187,7 +285,8 @@ export function PaymentModal({
       if (next[cartItemId]) {
         delete next[cartItemId]
       } else {
-        next[cartItemId] = unpaidQty
+        // İŞ 1: Çok adetli bir kalem seçildiğinde varsayılan ödenecek adet 1 başlar
+        next[cartItemId] = 1
       }
       return next
     })
@@ -198,10 +297,20 @@ export function PaymentModal({
     setSplitCount(null)
     setCustomAmountInput(null)
     setSelectedQuantities((prev) => {
-      const current = prev[cartItemId] || unpaidQty
+      const current = prev[cartItemId] ?? 1
       const updated = Math.min(unpaidQty, Math.max(1, current + delta))
       return { ...prev, [cartItemId]: updated }
     })
+  }
+
+  const handleSetLineAllQty = (cartItemId: string, unpaidQty: number) => {
+    if (unpaidQty <= 0) return
+    setSplitCount(null)
+    setCustomAmountInput(null)
+    setSelectedQuantities((prev) => ({
+      ...prev,
+      [cartItemId]: unpaidQty,
+    }))
   }
 
   const handleSelectAllUnpaid = () => {
@@ -227,26 +336,20 @@ export function PaymentModal({
   }
 
   const handleSetFullRemaining = () => {
-    if (hasItemSelection) return
     setSplitCount(null)
-    setCustomAmountInput(null)
-    if (method === 'cash') setCashReceived(formatInputVal(remaining))
+    setCustomAmountInput(formatInputVal(remaining))
   }
 
   const handleSetHalfRemaining = () => {
-    if (hasItemSelection) return
     setSplitCount(null)
     const half = roundCurrency(remaining / 2)
     setCustomAmountInput(formatInputVal(half))
-    if (method === 'cash') setCashReceived(formatInputVal(half))
   }
 
   const handleSplitEqually = (n: number) => {
-    if (hasItemSelection) return
     setSplitCount(n)
     const share = roundCurrency(remaining / n)
     setCustomAmountInput(formatInputVal(share))
-    if (method === 'cash') setCashReceived(formatInputVal(share))
   }
 
   const handleCopyIban = () => {
@@ -273,9 +376,10 @@ export function PaymentModal({
     const newRemaining = Math.max(0, roundCurrency(remaining - payAmount))
     const isComplete = newRemaining === 0
 
-    const paidItemsPayload = hasItemSelection
-      ? selectedPayment.items.map((item) => ({ ...item }))
-      : undefined
+    const paidItemsPayload =
+      hasItemSelection && !isManualAmountWithSelection
+        ? selectedPayment.items.map((item) => ({ ...item }))
+        : undefined
 
     const paymentEntry: PartialPayment = {
       id: generateUUID(),
@@ -283,11 +387,17 @@ export function PaymentModal({
       amount: payAmount,
       ...(method === 'cash'
         ? {
-            receivedAmount: effectiveCashReceived,
-            change,
+            receivedAmount: payAmount,
+            change: 0,
           }
         : {}),
       ...(paidItemsPayload ? { items: paidItemsPayload } : {}),
+      ...(isManualAmountWithSelection
+        ? {
+            isManualAmount: true,
+            selectedItemsTotal: selectedPayment.totalAmount,
+          }
+        : {}),
       createdAt: new Date().toISOString(),
     }
 
@@ -324,7 +434,6 @@ export function PaymentModal({
             `${formatCurrency(payAmount)} ${methodText} ödeme alındı. Kalan: ${formatCurrency(newRemaining)}`,
           )
         }
-        setCashReceived('')
       } else {
         setFeedback(null)
       }
@@ -345,7 +454,7 @@ export function PaymentModal({
     <div className="overlay" role="dialog" aria-modal="true" aria-label={title}>
       <div className={`modal ${isWidePaymentView ? 'payment-modal-wide' : ''}`}>
         {!showReceipt && !paidMethod && (
-          <div className="modal-head">
+          <div key="payment-modal-head" className="modal-head">
             <div>
               <p className="section-kicker">#{orderNumber}</p>
               <h2 className="section-title">{title}</h2>
@@ -362,7 +471,7 @@ export function PaymentModal({
         )}
 
         {showReceipt ? (
-          <>
+          <div key="payment-receipt-view">
             <div className="modal-head">
               <div>
                 <p className="section-kicker">Fiş Çıktısı</p>
@@ -405,9 +514,9 @@ export function PaymentModal({
                 Fişi Yazdır
               </button>
             </div>
-          </>
+          </div>
         ) : paidMethod ? (
-          <div className="success-body">
+          <div key="payment-success-view" className="success-body">
             <div className="success-check">
               <Check size={31} strokeWidth={2.8} />
             </div>
@@ -460,7 +569,6 @@ export function PaymentModal({
                 onClick={() => {
                   setProcessing(false)
                   setShowReceipt(false)
-                  setCashReceived('')
                   setCustomAmountInput(null)
                   setFeedback(null)
                   setSelectedQuantities({})
@@ -472,7 +580,7 @@ export function PaymentModal({
             </div>
           </div>
         ) : processing ? (
-          <div className="processing">
+          <div key="payment-processing-view" className="processing">
             <div>
               <div className="spinner" />
               <h2 className="section-title text-[20px]">Ödeme doğrulanıyor</h2>
@@ -480,7 +588,7 @@ export function PaymentModal({
             </div>
           </div>
         ) : (
-          <div className="payment-modal-grid">
+          <div key="payment-main-grid" className="payment-modal-grid">
             {/* LEFT COLUMN: Sipariş Ürünleri */}
             <div className="payment-items-col" aria-label="Sipariş Ürünleri">
               <div className="payment-items-head">
@@ -654,6 +762,16 @@ export function PaymentModal({
                                 >
                                   <Plus size={13} />
                                 </button>
+                                {selectedQty < unpaidQty && (
+                                  <button
+                                    type="button"
+                                    className="stepper-all-btn"
+                                    onClick={() => handleSetLineAllQty(line.cartItemId, unpaidQty)}
+                                    title="Kalan tüm adedi seç"
+                                  >
+                                    Tümü
+                                  </button>
+                                )}
                               </div>
                             </div>
                           )}
@@ -722,6 +840,181 @@ export function PaymentModal({
                 </div>
               </div>
 
+              {onApplyDiscountAmount && remaining > 0 && (
+                <div className="rounded-xl border border-[#dfd5cc] dark:border-stone-700 bg-[#fcfaf7] dark:bg-stone-800/70 px-3 py-2">
+                  {!showDiscountEditor ? (
+                    <div key="discount-summary-view" className="flex items-center justify-between gap-2">
+                      {discountAmount > 0 ? (
+                        <div key="discount-applied" className="flex items-center justify-between gap-2 w-full">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 text-xs font-extrabold shrink-0">
+                              <Tag size={12} />
+                              <span>İndirim: -{formatCurrency(discountAmount)}</span>
+                            </span>
+                            <span className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 truncate">
+                              ({formatCurrency(baseTotalBeforePaymentDiscount)} → {formatCurrency(grandTotal)})
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={handleOpenDiscountEditor}
+                              className="px-2 py-1 rounded-lg text-[11px] font-bold bg-[#f1e9e1] hover:bg-[#e5d9ce] dark:bg-stone-700 dark:hover:bg-stone-600 text-stone-700 dark:text-stone-200 transition-colors"
+                            >
+                              Düzenle
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleClearDiscount}
+                              className="px-2 py-1 rounded-lg text-[11px] font-bold bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 text-rose-600 dark:text-rose-300 transition-colors"
+                              title="İndirimi kaldır"
+                            >
+                              Kaldır
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          key="discount-add-btn"
+                          type="button"
+                          onClick={handleOpenDiscountEditor}
+                          className="w-full flex items-center justify-between text-xs font-bold text-[#6e4933] dark:text-amber-300 hover:text-[#4e3322] dark:hover:text-amber-200 py-0.5 transition-colors"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <Tag size={14} />
+                            <span>İndirim Uygula (Yuvarlama / ₺ / %)</span>
+                          </span>
+                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-[#f1e9e1] dark:bg-stone-700 text-stone-600 dark:text-stone-300">
+                            + Ekle
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <div key="discount-editor-view" className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-black text-stone-700 dark:text-stone-200 flex items-center gap-1.5">
+                          <Tag size={13} className="text-[#8a6d57] dark:text-amber-300" />
+                          Ödeme İndirimi
+                        </span>
+                        <div className="flex items-center gap-1 bg-[#f1e9e1] dark:bg-stone-900 p-0.5 rounded-lg">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDiscountMode('amount')
+                              setDiscountInput('')
+                            }}
+                            className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-colors ${
+                              discountMode === 'amount'
+                                ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs'
+                                : 'text-stone-600 dark:text-stone-400'
+                            }`}
+                          >
+                            ₺ İndirim
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDiscountMode('net')
+                              setDiscountInput('')
+                            }}
+                            className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-colors ${
+                              discountMode === 'net'
+                                ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs'
+                                : 'text-stone-600 dark:text-stone-400'
+                            }`}
+                          >
+                            Net Tutar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDiscountMode('percent')
+                              setDiscountInput('')
+                            }}
+                            className={`px-2 py-0.5 rounded-md text-[11px] font-bold transition-colors ${
+                              discountMode === 'percent'
+                                ? 'bg-white dark:bg-stone-700 text-stone-900 dark:text-stone-100 shadow-xs'
+                                : 'text-stone-600 dark:text-stone-400'
+                            }`}
+                          >
+                            % Oran
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          autoFocus
+                          value={discountInput}
+                          onChange={(e) => setDiscountInput(sanitizeDecimalInput(e.target.value))}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !discountError) {
+                              e.preventDefault()
+                              handleApplyDiscount()
+                            } else if (e.key === 'Escape') {
+                              e.preventDefault()
+                              setShowDiscountEditor(false)
+                            }
+                          }}
+                          placeholder={
+                            discountMode === 'amount'
+                              ? 'İndirim tutarı (örn: 10)'
+                              : discountMode === 'net'
+                                ? `Alınacak tutar (örn: ${Math.floor(baseTotalBeforePaymentDiscount / 10) * 10})`
+                                : 'İndirim % (örn: 10)'
+                          }
+                          className={`cash-input flex-1 !py-1.5 !text-sm ${discountError ? 'input-error' : ''}`}
+                          aria-label="İndirim değeri"
+                        />
+                        <button
+                          type="button"
+                          disabled={Boolean(discountError)}
+                          onClick={handleApplyDiscount}
+                          className="px-3 py-1.5 rounded-xl text-xs font-black bg-[#8a6d57] hover:bg-[#745a47] disabled:opacity-40 text-white transition-colors shrink-0"
+                        >
+                          Uygula
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowDiscountEditor(false)
+                            setDiscountInput('')
+                          }}
+                          className="px-2.5 py-1.5 rounded-xl text-xs font-bold bg-stone-200 hover:bg-stone-300 dark:bg-stone-700 dark:hover:bg-stone-600 text-stone-700 dark:text-stone-200 transition-colors shrink-0"
+                        >
+                          İptal
+                        </button>
+                      </div>
+
+                      {discountError ? (
+                        <p key="disc-error" className="payment-validation-msg !mt-1" role="alert">
+                          <AlertCircle size={12} />
+                          <span>{discountError}</span>
+                        </p>
+                      ) : discountInput.trim() !== '' ? (
+                        <div key="disc-preview" className="flex items-center justify-between text-[11px] font-bold text-stone-600 dark:text-stone-300 px-0.5">
+                          <span>
+                            Uygulanacak İndirim:{' '}
+                            <strong className="text-rose-600 dark:text-rose-400">
+                              -{formatCurrency(Math.max(0, candidateDiscountAmount))}
+                            </strong>
+                          </span>
+                          <span>
+                            Yeni Toplam:{' '}
+                            <strong className="text-emerald-700 dark:text-emerald-400">
+                              {formatCurrency(previewNewTotal)}
+                            </strong>
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {feedback && (
                 <div className="partial-feedback" role="status">
                   <CheckCircle2 size={15} className="shrink-0" />
@@ -732,30 +1025,36 @@ export function PaymentModal({
               <div className="method-grid" role="radiogroup" aria-label="Ödeme yöntemi">
                 <button
                   type="button"
-                  className={`method-card ${method === 'card' ? 'selected' : ''}`}
-                  onClick={() => setMethod('card')}
+                  disabled={!canCard}
+                  className={`method-card ${method === 'card' ? 'selected' : ''} ${!canCard ? 'opacity-35 cursor-not-allowed' : ''}`}
+                  onClick={() => canCard && setMethod('card')}
                   role="radio"
                   aria-checked={method === 'card'}
+                  title={!canCard ? 'Kart ile ödeme yetkiniz yok' : undefined}
                 >
                   <CreditCard size={25} />
                   <span>Kart</span>
                 </button>
                 <button
                   type="button"
-                  className={`method-card ${method === 'cash' ? 'selected' : ''}`}
-                  onClick={() => setMethod('cash')}
+                  disabled={!canCash}
+                  className={`method-card ${method === 'cash' ? 'selected' : ''} ${!canCash ? 'opacity-35 cursor-not-allowed' : ''}`}
+                  onClick={() => canCash && setMethod('cash')}
                   role="radio"
                   aria-checked={method === 'cash'}
+                  title={!canCash ? 'Nakit ile ödeme yetkiniz yok' : undefined}
                 >
                   <Banknote size={25} />
                   <span>Nakit</span>
                 </button>
                 <button
                   type="button"
-                  className={`method-card ${method === 'iban' ? 'selected' : ''}`}
-                  onClick={() => setMethod('iban')}
+                  disabled={!canIban}
+                  className={`method-card ${method === 'iban' ? 'selected' : ''} ${!canIban ? 'opacity-35 cursor-not-allowed' : ''}`}
+                  onClick={() => canIban && setMethod('iban')}
                   role="radio"
                   aria-checked={method === 'iban'}
+                  title={!canIban ? 'IBAN ile ödeme yetkiniz yok' : undefined}
                 >
                   <Landmark size={25} />
                   <span>IBAN</span>
@@ -765,7 +1064,7 @@ export function PaymentModal({
               {/* Editable Amount to Pay Now (or Locked Selected Items Total) */}
               <div className="split-amount-area">
                 <div className="flex items-center justify-between gap-2">
-                  <label className="text-[11px] font-bold text-stone-500" htmlFor="amount-to-pay">
+                  <label className="text-xs font-black text-stone-700 dark:text-stone-300" htmlFor="amount-to-pay">
                     {hasItemSelection
                       ? 'Seçili ürünlerin toplamı'
                       : 'Ödenecek tutar (Bölerek ödeme)'}
@@ -781,7 +1080,7 @@ export function PaymentModal({
                   ) : (
                     amountToPay < remaining &&
                     amountToPay > 0 && (
-                      <span className="text-[11px] font-bold text-amber-800">
+                      <span className="text-xs font-black text-amber-800 dark:text-amber-400">
                         İşlem sonrası kalan:{' '}
                         {formatCurrency(Math.max(0, roundCurrency(remaining - amountToPay)))}
                       </span>
@@ -790,19 +1089,27 @@ export function PaymentModal({
                 </div>
                 <input
                   id="amount-to-pay"
-                  className={`cash-input ${hasItemSelection ? 'readonly-locked' : ''} ${
+                  disabled={!canCustomAmount}
+                  readOnly={!canCustomAmount}
+                  title={!canCustomAmount ? 'Tutar manuel olarak değiştirilemez' : undefined}
+                  className={`cash-input ${
                     !isAmountValid && amountInput.trim() !== '' ? 'input-error' : ''
-                  }`}
+                  } ${!canCustomAmount ? 'opacity-70 cursor-not-allowed bg-stone-100 dark:bg-stone-800' : ''}`}
                   inputMode="decimal"
-                  readOnly={hasItemSelection}
                   value={amountInput}
                   onChange={(event) => {
-                    if (hasItemSelection) return
+                    if (!canCustomAmount) return
                     setSplitCount(null)
-                    setCustomAmountInput(event.target.value)
+                    setCustomAmountInput(sanitizeDecimalInput(event.target.value))
                   }}
                   placeholder={formatCurrency(remaining)}
                 />
+                {isManualAmountWithSelection && isAmountValid && (
+                  <p className="text-xs font-bold text-amber-800 dark:text-amber-400 mt-1.5 flex items-center gap-1" role="status">
+                    <AlertCircle size={14} className="shrink-0" />
+                    Manuel tutar girildi, ödeme tutar bazlı uygulanacak.
+                  </p>
+                )}
                 {isAmountExceeding && (
                   <p className="payment-validation-msg" role="alert">
                     <AlertCircle size={13} />
@@ -815,97 +1122,52 @@ export function PaymentModal({
                     Ödenecek tutar 0&apos;dan büyük olmalıdır.
                   </p>
                 )}
-                <div className="quick-amounts split-quick-amounts">
-                  <button
-                    type="button"
-                    disabled={hasItemSelection}
-                    onClick={handleSetFullRemaining}
-                  >
-                    Tam Tutar ({formatCurrency(remaining)})
-                  </button>
-                  <button
-                    type="button"
-                    disabled={hasItemSelection}
-                    onClick={handleSetHalfRemaining}
-                  >
-                    Yarısı ({formatCurrency(roundCurrency(remaining / 2))})
-                  </button>
-                  <button
-                    type="button"
-                    disabled={hasItemSelection}
-                    className={!hasItemSelection && splitCount === 3 ? 'active' : ''}
-                    onClick={() => handleSplitEqually(3)}
-                    title="Kalan tutarı 3 kişiye eşit böl"
-                  >
-                    <Users size={11} className="inline mr-1" />1/3 Böl
-                  </button>
-                  <button
-                    type="button"
-                    disabled={hasItemSelection}
-                    className={!hasItemSelection && splitCount === 4 ? 'active' : ''}
-                    onClick={() => handleSplitEqually(4)}
-                    title="Kalan tutarı 4 kişiye eşit böl"
-                  >
-                    <Users size={11} className="inline mr-1" />1/4 Böl
-                  </button>
-                </div>
+                {canPartial && (
+                  <div className="quick-amounts split-quick-amounts">
+                    <button
+                      type="button"
+                      onClick={handleSetFullRemaining}
+                    >
+                      Tam Tutar ({formatCurrency(remaining)})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSetHalfRemaining}
+                    >
+                      Yarısı ({formatCurrency(roundCurrency(remaining / 2))})
+                    </button>
+                    <button
+                      type="button"
+                      className={splitCount === 3 ? 'active' : ''}
+                      onClick={() => handleSplitEqually(3)}
+                      title="Kalan tutarı 3 kişiye eşit böl"
+                    >
+                      <Users size={11} className="inline mr-1" />1/3 Böl
+                    </button>
+                    <button
+                      type="button"
+                      className={splitCount === 4 ? 'active' : ''}
+                      onClick={() => handleSplitEqually(4)}
+                      title="Kalan tutarı 4 kişiye eşit böl"
+                    >
+                      <Users size={11} className="inline mr-1" />1/4 Böl
+                    </button>
+                  </div>
+                )}
               </div>
 
               {method === 'card' && (
-                <div className="terminal-card">
+                <div key="method-card-info" className="terminal-card">
                   <span className="pulse-dot" />
                   <div>
-                    <strong className="block text-[12px]">Kart terminali hazır</strong>
-                    <span>Temassız veya çipli kartınızı okutun.</span>
-                  </div>
-                </div>
-              )}
-
-              {method === 'cash' && (
-                <div className="cash-area">
-                  <label className="text-[11px] font-bold text-stone-500" htmlFor="cash-received">
-                    Müşterinin verdiği tutar
-                  </label>
-                  <input
-                    id="cash-received"
-                    className={`cash-input ${isCashInsufficient ? 'input-error' : ''}`}
-                    inputMode="decimal"
-                    value={cashReceived}
-                    onChange={(event) => setCashReceived(event.target.value)}
-                    placeholder={formatCurrency(appliedAmount || remaining)}
-                  />
-                  {isCashInsufficient && (
-                    <p className="payment-validation-msg" role="alert">
-                      <AlertCircle size={13} />
-                      Verilen tutar ödenecek tutardan ({formatCurrency(appliedAmount)}) az olamaz.
-                    </p>
-                  )}
-                  <div className="quick-amounts">
-                    {[200, 300, 500].map((value) => (
-                      <button
-                        type="button"
-                        key={value}
-                        onClick={() => setCashReceived(String(value))}
-                      >
-                        {formatCurrency(value)}
-                      </button>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={() => setCashReceived(formatInputVal(appliedAmount || remaining))}
-                    >
-                      Tam Tutar
-                    </button>
-                  </div>
-                  <div className="change-line">
-                    <span>Para Üstü</span>
-                    <strong>{formatCurrency(change)}</strong>
+                    <strong className="block text-sm font-black">Kart terminali hazır</strong>
+                    <span className="text-xs font-semibold">Temassız veya çipli kartınızı okutun.</span>
                   </div>
                 </div>
               )}
 
               {method === 'iban' && (
-                <div className="iban-card" aria-label="IBAN ile ödeme bilgileri">
+                <div key="method-iban-info" className="iban-card" aria-label="IBAN ile ödeme bilgileri">
                   {isIbanUnconfigured && (
                     <div className="iban-warning">
                       <AlertCircle size={14} className="shrink-0" />
@@ -990,10 +1252,7 @@ export function PaymentModal({
                     )}
                   </div>
                   {payments.map((p) => {
-                    const timeStr = new Date(p.createdAt).toLocaleTimeString('tr-TR', {
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })
+                    const timeStr = formatTime(p.createdAt)
                     const itemsSummary = formatPaymentItemsSummary(p)
                     return (
                       <div key={p.id} className="partial-payment-row">
@@ -1025,17 +1284,17 @@ export function PaymentModal({
                 disabled={!canConfirm}
               >
                 {method === 'card' ? (
-                  <CreditCard size={18} />
+                  <CreditCard key="confirm-icon-card" size={18} />
                 ) : method === 'cash' ? (
-                  <Banknote size={18} />
+                  <Banknote key="confirm-icon-cash" size={18} />
                 ) : (
-                  <CheckCircle2 size={18} />
-                )}{' '}
-                {hasItemSelection
-                  ? `Seçili Ürünleri Öde (${formatCurrency(appliedAmount)})`
-                  : appliedAmount > 0 && appliedAmount < remaining
-                    ? `${formatCurrency(appliedAmount)} Kısmi Ödemeyi Onayla`
-                    : 'Ödemeyi Onayla'}
+                  <CheckCircle2 key="confirm-icon-iban" size={18} />
+                )}
+                <span>
+                  {hasItemSelection && !isManualAmountWithSelection
+                    ? `Seçili Ürünleri Öde (${formatCurrency(appliedAmount)})`
+                    : `${method ? paymentMethodLabel(method).toLocaleUpperCase('tr-TR') : 'Öde'} (${formatCurrency(appliedAmount)})`}
+                </span>
               </button>
             </div>
           </div>

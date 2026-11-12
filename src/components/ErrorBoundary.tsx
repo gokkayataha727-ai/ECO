@@ -1,5 +1,5 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
-import { AlertTriangle, RefreshCw, Trash2 } from 'lucide-react'
+import { AlertTriangle, RefreshCw } from 'lucide-react'
 
 interface Props {
   children: ReactNode
@@ -8,31 +8,38 @@ interface Props {
 interface State {
   hasError: boolean
   error: Error | null
+  componentStack: string | null
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
     error: null,
+    componentStack: null,
   }
 
-  public static getDerivedStateFromError(error: Error): State {
+  public static getDerivedStateFromError(error: Error): Partial<State> {
     return { hasError: true, error }
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('Uncaught React Error:', error, errorInfo)
+    this.setState({ componentStack: errorInfo.componentStack || null })
   }
 
   private handleReload = () => {
     window.location.reload()
   }
 
-  private handleResetCache = () => {
-    if (window.confirm('Önbellek temizlenip sayfa yenilenecek. Emin misiniz?')) {
-      localStorage.removeItem('businessDays')
-      window.location.reload()
+  private handleSafeRecovery = () => {
+    // Non-destructive safe recovery: Reload the application without deleting historical business days or orders
+    try {
+      // Clear temporary session tokens or view flags if needed, but NEVER touch business records
+      sessionStorage.clear()
+    } catch {
+      // Ignore
     }
+    window.location.reload()
   }
 
   public render() {
@@ -52,8 +59,13 @@ export class ErrorBoundary extends Component<Props, State> {
             </div>
 
             {this.state.error && (
-              <div className="p-3 bg-stone-50 border border-stone-200 rounded-xl text-left text-[11px] font-mono text-stone-700 break-words max-h-32 overflow-y-auto">
-                {this.state.error.message || String(this.state.error)}
+              <div className="p-3 bg-stone-50 border border-stone-200 rounded-xl text-left text-[11px] font-mono text-stone-700 break-words max-h-40 overflow-y-auto space-y-1">
+                <div>{this.state.error.message || String(this.state.error)}</div>
+                {this.state.componentStack && (
+                  <pre className="text-[10px] text-stone-500 whitespace-pre-wrap pt-1 border-t border-stone-200">
+                    {this.state.componentStack.trim().split('\n').slice(0, 6).join('\n')}
+                  </pre>
+                )}
               </div>
             )}
 
@@ -69,11 +81,11 @@ export class ErrorBoundary extends Component<Props, State> {
 
               <button
                 type="button"
-                onClick={this.handleResetCache}
+                onClick={this.handleSafeRecovery}
                 className="w-full py-2.5 px-4 rounded-xl border border-[#dfd5cc] hover:bg-stone-50 text-[#8a6d57] font-bold text-xs flex items-center justify-center gap-2 transition-colors cursor-pointer"
               >
-                <Trash2 size={13} />
-                <span>Günü Sıfırla & Yeniden Dene</span>
+                <RefreshCw size={13} />
+                <span>Güvenli Kurtarma (Veriler Korunur)</span>
               </button>
             </div>
           </div>

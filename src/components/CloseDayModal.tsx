@@ -21,6 +21,7 @@ import type {
   Table,
 } from '../types'
 import { ZReportPrintView } from './ZReportPrintView'
+import { PrintPortal } from './PrintPortal'
 
 interface CloseDayModalProps {
   isOpen: boolean
@@ -159,6 +160,22 @@ export function CloseDayModal({
             </div>
           </div>
 
+          <PrintPortal>
+            <div
+              className={`print-container ${
+                printMode === 'a4' ? 'print-a4' : 'print-receipt'
+              }`}
+            >
+              <ZReportPrintView
+                report={closedDayResult.report}
+                day={closedDayResult}
+                titleLabel="Gün Sonu Özeti"
+                settings={settings}
+                mode={printMode}
+              />
+            </div>
+          </PrintPortal>
+
           <div className="max-h-[62vh] overflow-y-auto p-4 bg-[#efe8e0]">
             <ZReportPrintView
               report={closedDayResult.report}
@@ -191,7 +208,17 @@ export function CloseDayModal({
             <button
               type="button"
               className="solid-action flex-1 flex items-center justify-center gap-1.5"
-              onClick={() => window.print()}
+              onClick={() => {
+                const safeDate = new Date().toISOString().slice(0, 10)
+                const prevTitle = document.title
+                document.title = `LEMOON_KAFE_Z_Raporu_GunSonu_${safeDate}`
+                setTimeout(() => {
+                  window.print()
+                  setTimeout(() => {
+                    document.title = prevTitle
+                  }, 1000)
+                }, 50)
+              }}
             >
               <Printer size={15} />
               <span>Yazdır</span>
@@ -355,7 +382,7 @@ export function CloseDayModal({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-36 overflow-y-auto pr-1">
                 {occupiedTables.map((t) => {
-                  const { total } = calculateTotals(t.cart, t.discountRate || 0)
+                  const { total } = calculateTotals(t.cart, t.discountRate || 0, t.discountAmount || 0)
                   const count = t.cart.reduce((s, i) => s + i.quantity, 0)
                   return (
                     <div
@@ -462,16 +489,13 @@ export function CloseDayModal({
               )}
           </div>
 
-          {/* Section: POS Z Report & Card Carry-Over Details */}
+          {/* Section: POS Z Report */}
           <div className="p-4 rounded-2xl bg-[#f4ebe3]/60 border border-[#dfd5cc] space-y-3">
             <div className="flex items-center justify-between">
               <div>
                 <span className="text-xs font-extrabold text-[#5c493d] flex items-center gap-1.5 uppercase tracking-wider">
                   <CreditCard size={14} className="text-[#8a6d57]" />
-                  POS Z Raporu & Kart Devir Detayı
-                </span>
-                <span className="text-[11px] text-[#8a6d57] font-semibold">
-                  Otomatik Z Kesim Saati: {cardBreakdown.posZCutoffTime}
+                  POS Z Raporu Özeti
                 </span>
               </div>
               <div className="text-right">
@@ -487,41 +511,18 @@ export function CloseDayModal({
             {/* Breakdown Table Rows */}
             <div className="rounded-xl bg-white border border-[#dfd5cc] divide-y divide-[#f0e8e0] text-xs overflow-hidden">
               <div className="flex items-center justify-between px-3.5 py-2">
-                <span className="text-[#6d5a4e] font-semibold">Nakit satış</span>
+                <span className="text-[#6d5a4e] font-semibold">Nakit Satışlar</span>
                 <strong className="text-[#3b2b21]">{formatCurrency(liveReport.paymentDistribution.cash)}</strong>
               </div>
               <div className="flex items-center justify-between px-3.5 py-2">
-                <span className="text-[#6d5a4e] font-semibold">Kart satış (toplam)</span>
+                <span className="text-[#6d5a4e] font-semibold">Kredi Kartı Satışları (Toplam)</span>
                 <strong className="text-[#3b2b21]">{formatCurrency(cardBreakdown.totalCard)}</strong>
-              </div>
-              <div className="flex items-center justify-between px-3.5 py-1.5 pl-6 bg-[#fcfaf7]">
-                <span className="text-[#8a6d57] font-medium text-[11px]">
-                  ↳ {cardBreakdown.posZCutoffTime} öncesi (Z raporuna girer)
-                </span>
-                <strong className="text-emerald-700">{formatCurrency(cardBreakdown.cardBeforeCutoff)}</strong>
-              </div>
-              <div className="flex items-center justify-between px-3.5 py-1.5 pl-6 bg-[#fcfaf7]">
-                <span className="text-[#8a6d57] font-medium text-[11px]">
-                  ↳ {cardBreakdown.posZCutoffTime} sonrası (yarına devreder)
-                </span>
-                <strong className="text-amber-700">{formatCurrency(cardBreakdown.cardAfterCutoff)}</strong>
-              </div>
-              <div className="flex items-center justify-between px-3.5 py-2">
-                <span className="text-[#6d5a4e] font-semibold">Önceki günden devreden kart</span>
-                <strong className="text-[#3b2b21]">{formatCurrency(cardBreakdown.cardCarryIn)}</strong>
               </div>
               <div className="flex items-center justify-between px-3.5 py-2.5 bg-[#f7f1eb] font-extrabold border-t border-[#e2d6ca]">
                 <span className="text-[#3b2b21]">
-                  Beklenen POS Z raporu toplamı{' '}
-                  <span className="text-[10px] text-[#8a6d57] font-normal">
-                    (= devreden + {cardBreakdown.posZCutoffTime} öncesi)
-                  </span>
+                  Beklenen POS Z Raporu Toplamı
                 </span>
                 <strong className="text-sm text-[#3b2b21]">{formatCurrency(cardBreakdown.expectedZ)}</strong>
-              </div>
-              <div className="flex items-center justify-between px-3.5 py-2 bg-amber-50/50">
-                <span className="text-[#8a6d57] font-bold">Yarına devreden kart tutarı</span>
-                <strong className="text-amber-800 font-extrabold">{formatCurrency(cardBreakdown.cardCarryOut)}</strong>
               </div>
             </div>
 

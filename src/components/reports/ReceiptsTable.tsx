@@ -1,10 +1,10 @@
 import React, { useState } from 'react'
 import { formatCurrency } from '../../lib/format'
-import { ChevronDown, ChevronRight, Receipt } from 'lucide-react'
+import { ChevronDown, ChevronRight, Receipt, RotateCcw } from 'lucide-react'
 
 interface OrderItem {
   id: string
-  product: { name: string, category: string }
+  product: { name: string; category: string }
   quantity: number
   unit_price: number
   line_total: number
@@ -19,20 +19,24 @@ interface Order {
   customerName?: string
   orderNumber?: string
   status: string
+  businessDayId?: string
   items?: OrderItem[]
 }
 
 interface ReceiptsTableProps {
-  data: {
-    items: Order[]
-    total: number
-    page: number
-  } | undefined
+  data:
+    | {
+        items: Order[]
+        total: number
+        page: number
+      }
+    | undefined
   isLoading: boolean
   onPageChange: (page: number) => void
+  onReopenOrder?: (orderId: string) => void
 }
 
-export function ReceiptsTable({ data, isLoading, onPageChange }: ReceiptsTableProps) {
+export function ReceiptsTable({ data, isLoading, onPageChange, onReopenOrder }: ReceiptsTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
   const toggleRow = (id: string) => {
@@ -72,6 +76,7 @@ export function ReceiptsTable({ data, isLoading, onPageChange }: ReceiptsTablePr
               <th className="px-6 py-4 font-medium">Kasiyer</th>
               <th className="px-6 py-4 font-medium">Ödeme</th>
               <th className="px-6 py-4 font-medium text-right">Tutar</th>
+              <th className="px-6 py-4 font-medium text-right w-28">İşlem</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-50">
@@ -111,10 +116,23 @@ export function ReceiptsTable({ data, isLoading, onPageChange }: ReceiptsTablePr
                   <td className="px-6 py-4 text-sm font-bold text-gray-900 text-right">
                     {formatCurrency(order.total_amount)}
                   </td>
+                  <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
+                    {onReopenOrder && (
+                      <button
+                        type="button"
+                        onClick={() => onReopenOrder(order.id)}
+                        className="px-2.5 py-1 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg inline-flex items-center gap-1 transition-colors"
+                        title="Kapatılmış adisyonu masaya geri aç"
+                      >
+                        <RotateCcw size={12} />
+                        <span>Geri Aç</span>
+                      </button>
+                    )}
+                  </td>
                 </tr>
                 {expandedRows.has(order.id) && (
                   <tr className="bg-gray-50/50">
-                    <td colSpan={6} className="px-6 py-4">
+                    <td colSpan={7} className="px-6 py-4">
                       <div className="pl-10">
                         <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Sipariş Detayları</h4>
                         <table className="w-full max-w-2xl text-sm">

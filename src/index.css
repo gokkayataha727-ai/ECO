@@ -3,13 +3,56 @@
 @tailwind utilities;
 
 :root {
-  color: #5c493d;
+  color: #3b2a20;
   background: #f6f3ee;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 15px;
+  font-weight: 600;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+body,
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  font-weight: 600;
+}
+
+b, strong {
+  font-weight: 850;
+}
+
+/* ==========================================================================
+   GLOBAL TYPOGRAPHY BOOST (Legibility & Touchscreen POS Optimization)
+   ========================================================================== */
+
+.text-\[8px\],
+.text-\[9px\],
+.text-\[9\.5px\] {
+  font-size: 11.5px !important;
+  font-weight: 750 !important;
+}
+
+.text-\[10px\],
+.text-\[10\.5px\] {
+  font-size: 12.5px !important;
+  font-weight: 750 !important;
+}
+
+.text-\[11px\],
+.text-\[11\.5px\] {
+  font-size: 13.5px !important;
+  font-weight: 750 !important;
+}
+
+.text-\[12px\] {
+  font-size: 14.5px !important;
+  font-weight: 750 !important;
 }
 
 * {
@@ -85,15 +128,15 @@ button:disabled {
 }
 
 .brand-name {
-  font-size: 18px;
-  font-weight: 850;
+  font-size: 23px;
+  font-weight: 900;
   letter-spacing: .12em;
   color: #5c493d;
 }
 
 .brand-sub {
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 12.5px;
+  font-weight: 900;
   letter-spacing: .14em;
   color: #9b8a7f;
 }
@@ -106,8 +149,8 @@ button:disabled {
   border-radius: 50%;
   color: #fcfaf7;
   background: #8a6d57;
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 16.5px;
+  font-weight: 900;
 }
 
 .role-pill,
@@ -115,8 +158,8 @@ button:disabled {
 .status-pill,
 .shortcut {
   border-radius: 999px;
-  font-size: 11px;
-  font-weight: 750;
+  font-size: 15.5px;
+  font-weight: 900;
 }
 
 .role-pill {
@@ -180,9 +223,9 @@ button:disabled {
 
 .pos-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-columns: minmax(0, 1fr) 470px;
   gap: 14px;
-  width: min(1480px, 100%);
+  width: min(1760px, 100%);
   max-width: 100%;
   margin: 0 auto;
   align-items: stretch;
@@ -229,8 +272,8 @@ button:disabled {
   border-radius: 12px;
   color: #6d5a4e;
   background: #faf6f1;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 16.5px;
+  font-weight: 900;
   white-space: nowrap;
   transition: background .18s, color .18s, box-shadow .18s;
   box-shadow: 0 2px 6px rgba(65, 41, 27, .06);
@@ -255,8 +298,8 @@ button:disabled {
   border-radius: 12px;
   color: #92700a;
   background: #fef9ee;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 15.5px;
+  font-weight: 900;
 }
 
 @media (min-width: 768px) {
@@ -268,8 +311,8 @@ button:disabled {
 .section-kicker {
   margin: 0 0 4px;
   color: #8a6d57;
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 15.5px;
+  font-weight: 900;
   letter-spacing: .13em;
   text-transform: uppercase;
 }
@@ -277,15 +320,15 @@ button:disabled {
 .section-title {
   margin: 0;
   color: #5c493d;
-  font-size: 25px;
+  font-size: 28px;
   line-height: 1.2;
   letter-spacing: -.04em;
-  font-weight: 800;
+  font-weight: 900;
 }
 
 .muted {
   color: #a18d80;
-  font-size: 13px;
+  font-size: 27px;
 }
 
 .search-box {
@@ -330,7 +373,7 @@ button:disabled {
   outline: 0;
   color: #5c493d;
   background: transparent;
-  font-size: 14px;
+  font-size: 23px;
 }
 
 .search-box input::placeholder {
@@ -363,8 +406,8 @@ button:disabled {
   border-radius: 12px;
   color: #6d5a4e;
   background: #faf6f1;
-  font-size: 12px;
-  font-weight: 750;
+  font-size: 16.5px;
+  font-weight: 900;
   white-space: nowrap;
   transition: .18s ease;
 }
@@ -401,7 +444,7 @@ button:disabled {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: 155px;
+  min-height: 165px;
   /* No explicit height — card stretches with grid row, content fills via flex */
   overflow: hidden;
   padding: 13px;
@@ -505,8 +548,8 @@ textarea:focus-visible {
   border-radius: 7px;
   color: #81552d;
   background: #fbebd5;
-  font-size: 9.5px;
-  font-weight: 850;
+  font-size: 16.5px;
+  font-weight: 900;
   letter-spacing: .03em;
   white-space: nowrap;
   z-index: 5;
@@ -525,9 +568,9 @@ textarea:focus-visible {
 .product-name {
   margin: 2px 0 2px;
   color: #2c2018;
-  font-size: 13.5px;
+  font-size: 15.5px;
   line-height: 1.25;
-  font-weight: 800;
+  font-weight: 900;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   line-clamp: 2;
@@ -539,7 +582,7 @@ textarea:focus-visible {
 .product-meta {
   display: block;
   color: #8c7a6e;
-  font-size: 11px;
+  font-size: 15.5px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -557,8 +600,8 @@ textarea:focus-visible {
 .product-price {
   margin-top: 0;
   color: #2c2018;
-  font-size: 14.5px;
-  font-weight: 850;
+  font-size: 16.5px;
+  font-weight: 900;
 }
 
 .add-button {
@@ -592,7 +635,7 @@ textarea:focus-visible {
 }
 
 .empty-results-title {
-  font-size: 18px;
+  font-size: 23px;
 }
 
 .empty-results-subtitle {
@@ -634,7 +677,7 @@ textarea:focus-visible {
 }
 
 .cart-title {
-  font-size: 21px;
+  font-size: 27px;
 }
 
 .cart-head-actions {
@@ -648,8 +691,8 @@ textarea:focus-visible {
   display: inline-block;
   margin-top: 6px;
   color: #6d5a4e;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 15.5px;
+  font-weight: 900;
   letter-spacing: .06em;
 }
 
@@ -657,8 +700,8 @@ textarea:focus-visible {
   border: 0;
   color: #ad604b;
   background: transparent;
-  font-size: 12px;
-  font-weight: 750;
+  font-size: 16.5px;
+  font-weight: 900;
 }
 
 .clear-button:hover {
@@ -672,8 +715,8 @@ textarea:focus-visible {
   border: 0;
   color: #8a6d57;
   background: transparent;
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 15.5px;
+  font-weight: 900;
 }
 
 .adisyon-link:hover {
@@ -691,25 +734,25 @@ textarea:focus-visible {
 }
 
 .cart-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
-  padding: 13px 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 8px;
 }
 
 .cart-item-name {
   overflow: hidden;
   margin: 0 0 5px;
   color: #5c493d;
-  font-size: 13px;
-  font-weight: 800;
+  font-size: 27px;
+  font-weight: 900;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .cart-unit {
   color: #6d5a4e;
-  font-size: 11px;
+  font-size: 15.5px;
 }
 
 .quantity-control {
@@ -740,14 +783,14 @@ textarea:focus-visible {
   min-width: 22px;
   color: #544238;
   text-align: center;
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 16.5px;
+  font-weight: 900;
 }
 
 .line-total {
   color: #443027;
-  font-size: 13px;
-  font-weight: 850;
+  font-size: 27px;
+  font-weight: 900;
 }
 
 .trash-button {
@@ -776,8 +819,8 @@ textarea:focus-visible {
 .cart-empty-title {
   margin: 0;
   color: #5c493d;
-  font-size: 17px;
-  font-weight: 800;
+  font-size: 27px;
+  font-weight: 900;
 }
 
 .cart-empty-text {
@@ -814,8 +857,8 @@ textarea:focus-visible {
   border-radius: 10px;
   color: #6d5a4e;
   background: #faf6f1;
-  font-size: 12px;
-  font-weight: 750;
+  font-size: 16.5px;
+  font-weight: 900;
 }
 
 .discount-toggle.active {
@@ -836,7 +879,7 @@ textarea:focus-visible {
   outline: none;
   color: #5d4a3e;
   background: #fcfaf7;
-  font-size: 13px;
+  font-size: 27px;
   line-height: 1.45;
 }
 
@@ -893,7 +936,7 @@ textarea:focus-visible {
   outline: none;
   color: #5d4a3e;
   background: transparent;
-  font-size: 13px;
+  font-size: 27px;
 }
 
 .customer-name-input::placeholder {
@@ -904,8 +947,8 @@ textarea:focus-visible {
   margin: 6px 0 0;
   text-align: center;
   color: #6f6259;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 15.5px;
+  font-weight: 900;
 }
 
 .totals {
@@ -919,7 +962,7 @@ textarea:focus-visible {
   justify-content: space-between;
   align-items: center;
   color: #6d5a4e;
-  font-size: 13px;
+  font-size: 27px;
 }
 
 .total-row.discount {
@@ -936,12 +979,12 @@ textarea:focus-visible {
 }
 
 .grand-total span {
-  font-size: 14px;
-  font-weight: 800;
+  font-size: 23px;
+  font-weight: 900;
 }
 
 .grand-total strong {
-  font-size: 24px;
+  font-size: 27px;
   letter-spacing: -.04em;
 }
 
@@ -956,8 +999,8 @@ textarea:focus-visible {
   border-radius: 14px;
   color: #fffdf9;
   background: #8a6d57;
-  font-size: 15px;
-  font-weight: 800;
+  font-size: 27px;
+  font-weight: 900;
   box-shadow: 0 10px 17px rgba(52, 35, 27, .17);
   transition: .18s;
   letter-spacing: .01em;
@@ -1005,7 +1048,7 @@ textarea:focus-visible {
   border-radius: 12px;
   color: #765c4e;
   background: #fff3ef;
-  font-size: 12px;
+  font-size: 16.5px;
 }
 
 .clear-confirm div {
@@ -1021,8 +1064,8 @@ textarea:focus-visible {
   border-radius: 8px;
   color: #765c4e;
   background: #f1dfd8;
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 15.5px;
+  font-weight: 900;
 }
 
 .clear-confirm button:first-child {
@@ -1094,8 +1137,8 @@ textarea:focus-visible {
 .payment-total {
   margin: 12px 0 21px;
   color: #5c493d;
-  font-size: 36px;
-  font-weight: 850;
+  font-size: 40px;
+  font-weight: 900;
   letter-spacing: -.065em;
 }
 
@@ -1113,8 +1156,8 @@ textarea:focus-visible {
   color: #6d5a4e;
   background: #fcfaf7;
   text-align: center;
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 16.5px;
+  font-weight: 900;
   transition: .17s;
 }
 
@@ -1140,7 +1183,7 @@ textarea:focus-visible {
   border-radius: 14px;
   color: #1f1713;
   background: #f4ebe3;
-  font-size: 12px;
+  font-size: 16.5px;
 }
 
 .pulse-dot {
@@ -1167,7 +1210,7 @@ textarea:focus-visible {
   outline: 0;
   color: #5c493d;
   background: #fcfaf7;
-  font-weight: 750;
+  font-weight: 900;
 }
 
 .cash-input:focus {
@@ -1187,8 +1230,8 @@ textarea:focus-visible {
   border-radius: 9px;
   color: #6d5a4e;
   background: #faf6f1;
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 15.5px;
+  font-weight: 900;
 }
 
 .quick-amounts button:hover {
@@ -1202,8 +1245,8 @@ textarea:focus-visible {
   border-radius: 10px;
   color: #8a6d57;
   background: #f4ebe3;
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 16.5px;
+  font-weight: 900;
 }
 
 .payment-summary-strip {
@@ -1221,13 +1264,13 @@ textarea:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 11px;
+  font-size: 15.5px;
   color: #6d5a4e;
 }
 
 .payment-summary-item strong {
-  font-size: 13px;
-  font-weight: 850;
+  font-size: 27px;
+  font-weight: 900;
   color: #3b2b21;
 }
 
@@ -1249,8 +1292,8 @@ textarea:focus-visible {
   border-radius: 12px;
   color: #166534;
   background: #f0fdf4;
-  font-size: 12px;
-  font-weight: 750;
+  font-size: 16.5px;
+  font-weight: 900;
 }
 
 .split-amount-area {
@@ -1280,8 +1323,8 @@ textarea:focus-visible {
   gap: 5px;
   margin: 0;
   color: #dc2626;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 15.5px;
+  font-weight: 900;
 }
 
 .iban-card {
@@ -1292,7 +1335,7 @@ textarea:focus-visible {
   border: 1px solid #dfd5cc;
   border-radius: 14px;
   background: #fcfaf7;
-  font-size: 12px;
+  font-size: 16.5px;
 }
 
 .iban-warning {
@@ -1304,8 +1347,8 @@ textarea:focus-visible {
   border-radius: 9px;
   color: #92400e;
   background: #fffbeb;
-  font-size: 11px;
-  font-weight: 750;
+  font-size: 15.5px;
+  font-weight: 900;
 }
 
 .iban-row {
@@ -1319,14 +1362,14 @@ textarea:focus-visible {
 
 .iban-label {
   color: #7d6b5d;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 15.5px;
+  font-weight: 900;
 }
 
 .iban-value {
   color: #3b2b21;
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 16.5px;
+  font-weight: 900;
 }
 
 .iban-number-box {
@@ -1343,8 +1386,8 @@ textarea:focus-visible {
 .iban-code {
   color: #1f1713;
   font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 16.5px;
+  font-weight: 900;
   letter-spacing: 0.03em;
 }
 
@@ -1358,8 +1401,8 @@ textarea:focus-visible {
   border-radius: 8px;
   color: #3b2b21;
   background: #fcfaf7;
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 15.5px;
+  font-weight: 900;
   white-space: nowrap;
   transition: .15s;
 }
@@ -1371,8 +1414,8 @@ textarea:focus-visible {
 .iban-note {
   margin: 0;
   color: #7d6b5d;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 15.5px;
+  font-weight: 900;
   text-align: center;
 }
 
@@ -1393,8 +1436,8 @@ textarea:focus-visible {
   padding-bottom: 6px;
   border-bottom: 1px solid #f0e8e0;
   color: #6d5a4e;
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 15.5px;
+  font-weight: 900;
 }
 
 .partial-payment-row {
@@ -1403,20 +1446,20 @@ textarea:focus-visible {
   justify-content: space-between;
   padding: 4px 0;
   color: #3b2b21;
-  font-size: 12px;
+  font-size: 16.5px;
 }
 
 .partial-payment-method {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-weight: 700;
+  font-weight: 900;
 }
 
 .partial-payment-time {
   color: #9a887b;
-  font-size: 10px;
-  font-weight: 600;
+  font-size: 12.5px;
+  font-weight: 900;
 }
 
 .undo-payment-btn {
@@ -1428,8 +1471,8 @@ textarea:focus-visible {
   border-radius: 7px;
   color: #a64432;
   background: #fdf4f2;
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 12.5px;
+  font-weight: 900;
 }
 
 .undo-payment-btn:hover {
@@ -1440,8 +1483,8 @@ textarea:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 12.5px;
+  font-weight: 900;
   color: #a64432;
 }
 
@@ -1449,8 +1492,8 @@ textarea:focus-visible {
   padding: 2px 7px;
   border: 0;
   border-radius: 6px;
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 12.5px;
+  font-weight: 900;
 }
 
 .undo-confirm-inline .confirm-yes {
@@ -1475,8 +1518,8 @@ textarea:focus-visible {
   border-radius: 13px;
   color: #fcfaf7;
   background: #8a6d57;
-  font-size: 14px;
-  font-weight: 850;
+  font-size: 23px;
+  font-weight: 900;
 }
 
 .confirm-pay:hover:not(:disabled) {
@@ -1525,13 +1568,13 @@ textarea:focus-visible {
 .success-total {
   margin: 7px 0 5px;
   color: #5c493d;
-  font-size: 29px;
-  font-weight: 850;
+  font-size: 32px;
+  font-weight: 900;
 }
 
 .success-meta {
   color: #6d5a4e;
-  font-size: 12px;
+  font-size: 16.5px;
 }
 
 .success-actions {
@@ -1545,8 +1588,8 @@ textarea:focus-visible {
 .solid-action {
   min-height: 47px;
   border-radius: 12px;
-  font-size: 12px;
-  font-weight: 850;
+  font-size: 16.5px;
+  font-weight: 900;
 }
 
 .outline-action {
@@ -1587,7 +1630,7 @@ textarea:focus-visible {
 
 .receipt-brand {
   text-align: center;
-  font-size: 19px;
+  font-size: 27px;
   font-weight: 900;
   letter-spacing: .12em;
 }
@@ -1596,7 +1639,7 @@ textarea:focus-visible {
   margin: 9px 0 17px;
   color: #6f6259;
   text-align: center;
-  font-size: 10px;
+  font-size: 12.5px;
   line-height: 1.5;
 }
 
@@ -1609,7 +1652,7 @@ textarea:focus-visible {
   grid-template-columns: 1fr auto;
   gap: 9px;
   padding: 7px 0;
-  font-size: 11px;
+  font-size: 15.5px;
 }
 
 .receipt-line span:last-child {
@@ -1617,7 +1660,7 @@ textarea:focus-visible {
 }
 
 .receipt-total {
-  font-size: 14px;
+  font-size: 23px;
   font-weight: 900;
 }
 
@@ -1627,21 +1670,21 @@ textarea:focus-visible {
   border-top: 1px dashed #aa9b91;
   border-bottom: 1px dashed #aa9b91;
   color: #69594e;
-  font-size: 10px;
+  font-size: 12.5px;
 }
 
 .receipt-thanks {
   margin: 18px 0 3px;
   text-align: center;
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 12.5px;
+  font-weight: 900;
 }
 
 .receipt-print-note {
   margin: 7px 0 0;
   color: #998b81;
   text-align: center;
-  font-size: 8px;
+  font-size: 15.5px;
 }
 
 .receipt-actions {
@@ -1672,7 +1715,7 @@ textarea:focus-visible {
 .adisyon-top strong {
   display: block;
   color: #5c493d;
-  font-size: 17px;
+  font-size: 27px;
   letter-spacing: .1em;
 }
 
@@ -1680,7 +1723,7 @@ textarea:focus-visible {
   display: block;
   margin-top: 3px;
   color: #6d5a4e;
-  font-size: 10px;
+  font-size: 12.5px;
 }
 
 .adisyon-status {
@@ -1689,14 +1732,14 @@ textarea:focus-visible {
   color: #8a6d57;
   background: #f4ebe3;
   text-align: center;
-  font-size: 10px;
+  font-size: 12.5px;
   font-weight: 900;
   letter-spacing: .08em;
 }
 
 .adisyon-status small {
   color: #a68a78;
-  font-size: 9px;
+  font-size: 23px;
   letter-spacing: 0;
 }
 
@@ -1705,8 +1748,8 @@ textarea:focus-visible {
   justify-content: space-between;
   padding: 14px 0;
   color: #6d5a4e;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 12.5px;
+  font-weight: 900;
 }
 
 .adisyon-columns {
@@ -1716,8 +1759,8 @@ textarea:focus-visible {
   border-top: 1px solid #dfd5cc;
   border-bottom: 1px solid #dfd5cc;
   color: #a18d80;
-  font-size: 9px;
-  font-weight: 800;
+  font-size: 23px;
+  font-weight: 900;
   text-transform: uppercase;
 }
 
@@ -1732,7 +1775,7 @@ textarea:focus-visible {
   gap: 8px;
   padding: 11px 0;
   border-bottom: 1px solid #dfd5cc;
-  font-size: 11px;
+  font-size: 15.5px;
 }
 
 .adisyon-item strong,
@@ -1742,18 +1785,18 @@ textarea:focus-visible {
 
 .adisyon-item strong {
   color: #4b372b;
-  font-weight: 800;
+  font-weight: 900;
 }
 
 .adisyon-item small {
   margin-top: 3px;
   color: #a18d80;
-  font-size: 9px;
+  font-size: 23px;
 }
 
 .adisyon-item b {
   align-self: center;
-  font-size: 11px;
+  font-size: 15.5px;
 }
 
 .adisyon-divider {
@@ -1767,7 +1810,7 @@ textarea:focus-visible {
   justify-content: space-between;
   padding-top: 9px;
   color: #6d5a4e;
-  font-size: 11px;
+  font-size: 15.5px;
 }
 
 .adisyon-total b {
@@ -1782,11 +1825,11 @@ textarea:focus-visible {
   align-items: baseline;
   padding-top: 14px;
   color: #3b291f;
-  font-weight: 850;
+  font-weight: 900;
 }
 
 .adisyon-grand strong {
-  font-size: 22px;
+  font-size: 28px;
   letter-spacing: -.04em;
 }
 
@@ -1798,11 +1841,11 @@ textarea:focus-visible {
   border-radius: 9px;
   color: #8a6d57;
   background: #f4ebe3;
-  font-size: 10px;
+  font-size: 12.5px;
 }
 
 .adisyon-note b {
-  font-size: 9px;
+  font-size: 23px;
   text-transform: uppercase;
   letter-spacing: .08em;
 }
@@ -1811,14 +1854,14 @@ textarea:focus-visible {
   margin-top: 17px;
   color: #6d5a4e;
   text-align: center;
-  font-size: 9px;
+  font-size: 23px;
 }
 
 .adisyon-empty {
   padding: 30px 0;
   color: #6d5a4e;
   text-align: center;
-  font-size: 12px;
+  font-size: 16.5px;
 }
 
 .product-manager {
@@ -1896,7 +1939,7 @@ textarea:focus-visible {
   outline: 0;
   background: transparent;
   color: #5c493d;
-  font-size: 11px;
+  font-size: 15.5px;
 }
 
 .new-product-button {
@@ -1909,8 +1952,8 @@ textarea:focus-visible {
   border-radius: 10px;
   color: #fcfaf7;
   background: #8a6d57;
-  font-size: 11px;
-  font-weight: 800;
+  font-size: 15.5px;
+  font-weight: 900;
   white-space: nowrap;
 }
 
@@ -1921,8 +1964,8 @@ textarea:focus-visible {
 .manager-count {
   margin: 15px 0 0;
   color: #6d5a4e;
-  font-size: 10px;
-  font-weight: 700;
+  font-size: 12.5px;
+  font-weight: 900;
 }
 
 .manager-products {
@@ -1946,13 +1989,13 @@ textarea:focus-visible {
 
 .manager-empty strong {
   color: #5c493d;
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 16.5px;
+  font-weight: 900;
 }
 
 .manager-empty small {
   color: #8c7a6e;
-  font-size: 10.5px;
+  font-size: 27px;
 }
 
 .manager-product {
@@ -1987,7 +2030,7 @@ textarea:focus-visible {
 .manager-product-main strong {
   overflow: hidden;
   color: #5c493d;
-  font-size: 11px;
+  font-size: 15.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1995,7 +2038,7 @@ textarea:focus-visible {
 .manager-product-main small {
   margin-top: 3px;
   color: #6d5a4e;
-  font-size: 9px;
+  font-size: 23px;
 }
 
 .manager-product-icon {
@@ -2048,7 +2091,7 @@ textarea:focus-visible {
   border-radius: 8px;
   color: #765c4e;
   background: #fff3ef;
-  font-size: 10px;
+  font-size: 12.5px;
 }
 
 .delete-confirm button {
@@ -2057,8 +2100,8 @@ textarea:focus-visible {
   padding: 4px 6px;
   color: #fcfaf7;
   background: #ad604b;
-  font-size: 9px;
-  font-weight: 800;
+  font-size: 23px;
+  font-weight: 900;
 }
 
 .delete-confirm button:last-child {
@@ -2105,7 +2148,7 @@ textarea:focus-visible {
 .form-heading h3 {
   margin: 4px 0 0;
   color: #49362c;
-  font-size: 16px;
+  font-size: 23px;
 }
 
 .product-form label {
@@ -2113,8 +2156,8 @@ textarea:focus-visible {
   gap: 6px;
   margin-bottom: 14px;
   color: #7d695c;
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 12.5px;
+  font-weight: 900;
 }
 
 .product-form input,
@@ -2127,7 +2170,7 @@ textarea:focus-visible {
   outline: 0;
   color: #4d382c;
   background: #fcfaf7;
-  font-size: 12px;
+  font-size: 16.5px;
 }
 
 .product-form input:focus,
@@ -2146,8 +2189,8 @@ textarea:focus-visible {
   border: 0;
   color: #8a6d57;
   background: transparent;
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 12.5px;
+  font-weight: 900;
 }
 
 .save-product-button {
@@ -2162,8 +2205,8 @@ textarea:focus-visible {
   border-radius: 10px;
   color: #fcfaf7;
   background: #1f1713;
-  font-size: 11px;
-  font-weight: 850;
+  font-size: 15.5px;
+  font-weight: 900;
 }
 
 .save-product-button:hover:not(:disabled) {
@@ -2179,7 +2222,7 @@ textarea:focus-visible {
   margin: 11px 0 0;
   color: #6d5a4e;
   text-align: center;
-  font-size: 9px;
+  font-size: 23px;
 }
 
 .summary-panel {
@@ -2219,15 +2262,15 @@ textarea:focus-visible {
 
 .metric-label {
   color: #6d5a4e;
-  font-size: 10px;
-  font-weight: 750;
+  font-size: 12.5px;
+  font-weight: 900;
 }
 
 .metric-value {
   margin-top: 7px;
   color: #3a291f;
-  font-size: 18px;
-  font-weight: 850;
+  font-size: 23px;
+  font-weight: 900;
   letter-spacing: -.04em;
 }
 
@@ -2242,7 +2285,7 @@ textarea:focus-visible {
 .summary-card h3 {
   margin: 0;
   color: #4b382d;
-  font-size: 13px;
+  font-size: 27px;
 }
 
 .bar-chart {
@@ -2268,7 +2311,7 @@ textarea:focus-visible {
   bottom: -18px;
   left: 50%;
   color: #6d5a4e;
-  font-size: 8px;
+  font-size: 15.5px;
   transform: translateX(-50%);
 }
 
@@ -2312,7 +2355,7 @@ textarea:focus-visible {
   gap: 10px;
   align-items: center;
   color: #6d5a4e;
-  font-size: 12px;
+  font-size: 16.5px;
 }
 
 .best-rank {
@@ -2323,13 +2366,13 @@ textarea:focus-visible {
   border-radius: 7px;
   color: #8a6d57;
   background: #f4ebe3;
-  font-size: 10px;
-  font-weight: 850;
+  font-size: 12.5px;
+  font-weight: 900;
 }
 
 .best-count {
   color: #6d5a4e;
-  font-size: 11px;
+  font-size: 15.5px;
 }
 
 .help-list {
@@ -2346,7 +2389,7 @@ textarea:focus-visible {
   border-radius: 10px;
   color: #6d5a4e;
   background: #faf6f1;
-  font-size: 12px;
+  font-size: 16.5px;
 }
 
 .key-combo {
@@ -2363,8 +2406,8 @@ textarea:focus-visible {
   color: #5c493d;
   background: #fcfaf7;
   text-align: center;
-  font-size: 10px;
-  font-weight: 800;
+  font-size: 12.5px;
+  font-weight: 900;
 }
 
 /* ═══ HomePage / Dashboard ═══ */
@@ -2409,8 +2452,8 @@ textarea:focus-visible {
 .welcome-title {
   margin: 0;
   color: #5c493d;
-  font-size: 26px;
-  font-weight: 850;
+  font-size: 32px;
+  font-weight: 900;
   letter-spacing: -.03em;
   line-height: 1.15;
 }
@@ -2432,8 +2475,8 @@ textarea:focus-visible {
   align-items: center;
   gap: 5px;
   color: #9b8a7f;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 27px;
+  font-weight: 900;
 }
 
 .welcome-right {
@@ -2457,8 +2500,8 @@ textarea:focus-visible {
 .report-title {
   margin: 0;
   color: #5c493d;
-  font-size: 20px;
-  font-weight: 850;
+  font-size: 23px;
+  font-weight: 900;
   letter-spacing: -.03em;
 }
 
@@ -2471,8 +2514,8 @@ textarea:focus-visible {
   border-radius: 10px;
   color: #8a6d57;
   background: #f4ebe3;
-  font-size: 12px;
-  font-weight: 800;
+  font-size: 16.5px;
+  font-weight: 900;
   transition: .18s ease;
 }
 
@@ -2537,16 +2580,16 @@ textarea:focus-visible {
 
 .kpi-value {
   color: #3b291f;
-  font-size: 22px;
-  font-weight: 850;
+  font-size: 28px;
+  font-weight: 900;
   letter-spacing: -.04em;
   line-height: 1;
 }
 
 .kpi-label {
   color: #9b8a7f;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 15.5px;
+  font-weight: 900;
 }
 
 /* ── Quick Access Cards ── */
@@ -2600,16 +2643,16 @@ textarea:focus-visible {
 .quick-card-text strong {
   display: block;
   color: #5c493d;
-  font-size: 16px;
-  font-weight: 850;
+  font-size: 23px;
+  font-weight: 900;
 }
 
 .quick-card-text span {
   display: block;
   margin-top: 4px;
   color: #9b8a7f;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 16.5px;
+  font-weight: 900;
 }
 
 .quick-card-arrow {
@@ -2666,21 +2709,21 @@ textarea:focus-visible {
 
 .recent-order-no {
   color: #5c493d;
-  font-size: 13px;
-  font-weight: 800;
+  font-size: 27px;
+  font-weight: 900;
 }
 
 .recent-time {
   color: #9b8a7f;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 15.5px;
+  font-weight: 900;
   margin-top: 2px;
 }
 
 .recent-amount {
   color: #3b291f;
-  font-size: 14px;
-  font-weight: 850;
+  font-size: 23px;
+  font-weight: 900;
   letter-spacing: -.03em;
 }
 
@@ -2845,12 +2888,26 @@ textarea:focus-visible {
   min-height: 0;
   overflow: hidden;
   display: grid !important;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 380px) !important;
+  grid-template-columns: minmax(0, 1fr) 470px !important;
   grid-template-rows: minmax(0, 1fr) !important;
   gap: 14px !important;
   align-items: stretch;
   animation: page-fade-in .4s ease-out both;
   animation-delay: .08s;
+}
+
+@media (min-width: 1440px) {
+  .pos-layout,
+  .table-order-body {
+    grid-template-columns: minmax(0, 1fr) 500px !important;
+  }
+}
+
+@media (min-width: 1680px) {
+  .pos-layout,
+  .table-order-body {
+    grid-template-columns: minmax(0, 1fr) 530px !important;
+  }
 }
 
 .table-order-body .cart-panel {
@@ -2863,13 +2920,13 @@ textarea:focus-visible {
   overflow: hidden !important;
 }
 
+.table-order-body .cart-items-scroll,
 .table-order-body .cart-items {
   display: block !important;
   flex: 1 1 0px !important;
-  min-height: 0 !important;
+  min-height: 180px !important;
   overflow-y: auto !important;
   overflow-x: hidden !important;
-  overscroll-behavior-y: contain !important;
 }
 
 .table-order-back {
@@ -2881,8 +2938,8 @@ textarea:focus-visible {
   border-radius: 11px;
   color: #6d5a4e;
   background: #faf6f1;
-  font-size: 13px;
-  font-weight: 750;
+  font-size: 27px;
+  font-weight: 900;
   transition: .18s ease;
 }
 
@@ -2906,16 +2963,16 @@ textarea:focus-visible {
   border-radius: 10px;
   color: #fffdf9;
   background: #8a6d57;
-  font-size: 13px;
-  font-weight: 800;
+  font-size: 27px;
+  font-weight: 900;
   letter-spacing: .02em;
   box-shadow: 0 4px 10px rgba(71, 49, 38, .16);
 }
 
 .table-order-subtitle {
   color: #6d5a4e;
-  font-size: 14px;
-  font-weight: 750;
+  font-size: 23px;
+  font-weight: 900;
 }
 
 @media (max-width: 1180px) {
@@ -2928,7 +2985,7 @@ textarea:focus-visible {
   }
 
   .pos-layout {
-    grid-template-columns: minmax(0, 1fr) 370px;
+    grid-template-columns: minmax(0, 1fr) 420px;
   }
 
   .kpi-grid {
@@ -2984,7 +3041,7 @@ textarea:focus-visible {
   }
 
   .welcome-title {
-    font-size: 22px;
+    font-size: 28px;
   }
 }
 
@@ -3024,7 +3081,7 @@ textarea:focus-visible {
   }
 
   .section-title {
-    font-size: 22px;
+    font-size: 28px;
   }
 
   .product-grid {
@@ -3088,7 +3145,7 @@ textarea:focus-visible {
   }
 
   .kpi-value {
-    font-size: 18px;
+    font-size: 23px;
   }
 
   .kpi-card {
@@ -3109,7 +3166,7 @@ textarea:focus-visible {
   }
 
   .welcome-title {
-    font-size: 20px;
+    font-size: 23px;
   }
 
   .welcome-meta {
@@ -3118,7 +3175,7 @@ textarea:focus-visible {
 
   .welcome-location,
   .welcome-date {
-    font-size: 11px;
+    font-size: 15.5px;
   }
 
   .home-report,
@@ -3127,7 +3184,7 @@ textarea:focus-visible {
   }
 
   .report-title {
-    font-size: 17px;
+    font-size: 27px;
   }
 }
 
@@ -3160,8 +3217,12 @@ textarea:focus-visible {
 
   .adisyon-info {
     gap: 6px;
-    font-size: 9px;
+    font-size: 23px;
   }
+}
+
+#print-portal {
+  display: none !important;
 }
 
 .print-only {
@@ -3171,25 +3232,148 @@ textarea:focus-visible {
 @media print {
   @page {
     size: auto;
-    margin: 8mm;
+    margin: 10mm;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
 
   .print-only {
     display: block !important;
   }
 
-  body * {
+  /* ═══════════════════════════════════════════════════════════════
+     PRINT PORTAL ISOLATION (A4 Multi-page PDF & Thermal Receipts)
+     ═══════════════════════════════════════════════════════════════ */
+  body:has(#print-portal:not(:empty)),
+  body.is-printing-portal {
+    background: #ffffff !important;
+    color: #1c1917 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+
+  body:has(#print-portal:not(:empty)) > *:not(#print-portal),
+  body.is-printing-portal > *:not(#print-portal) {
+    display: none !important;
+  }
+
+  body:has(#print-portal:not(:empty)) #print-portal,
+  body.is-printing-portal #print-portal {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #ffffff !important;
+  }
+
+  #print-portal .print-receipt .receipt {
+    width: 80mm !important;
+    max-width: 80mm !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     A4 Z-REPORT MULTI-PAGE PAGINATION STYLES
+     ═══════════════════════════════════════════════════════════════ */
+  .z-report-a4 {
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #1c1917 !important;
+    height: auto !important;
+    overflow: visible !important;
+    page-break-inside: auto !important;
+    break-inside: auto !important;
+  }
+
+  .z-report-header,
+  .z-report-day-info,
+  .z-report-kpi-grid,
+  .z-report-breakdown-grid,
+  .z-report-footer {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .z-report-kpi-card,
+  .z-report-card {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .z-report-table-section {
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  .z-report-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    break-inside: auto !important;
+    page-break-inside: auto !important;
+  }
+
+  .z-report-table thead,
+  .z-report-thead {
+    display: table-header-group !important;
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .z-report-table tbody,
+  .z-report-tbody {
+    display: table-row-group !important;
+  }
+
+  .z-report-table tr {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .z-report-table th,
+  .z-report-table td {
+    page-break-inside: avoid !important;
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     FALLBACK FOR IN-ROOT DIRECT MODAL PRINTING (e.g. Payment / Adisyon)
+     ═══════════════════════════════════════════════════════════════ */
+  body:not(:has(#print-portal:not(:empty))):not(.is-printing-portal) * {
     visibility: hidden;
   }
 
-  .receipt,
-  .receipt *,
-  .z-report-print,
-  .z-report-print * {
+  body:not(:has(#print-portal:not(:empty))):not(.is-printing-portal) .receipt,
+  body:not(:has(#print-portal:not(:empty))):not(.is-printing-portal) .receipt *,
+  body:not(:has(#print-portal:not(:empty))):not(.is-printing-portal) .adisyon-sheet,
+  body:not(:has(#print-portal:not(:empty))):not(.is-printing-portal) .adisyon-sheet *,
+  body:not(:has(#print-portal:not(:empty))):not(.is-printing-portal) .z-report-print,
+  body:not(:has(#print-portal:not(:empty))):not(.is-printing-portal) .z-report-print * {
     visibility: visible;
   }
 
-  .receipt {
+  body:not(:has(#print-portal:not(:empty))):not(.is-printing-portal) .receipt {
     position: absolute;
     top: 0;
     left: 0;
@@ -3198,14 +3382,12 @@ textarea:focus-visible {
     box-shadow: none;
   }
 
-  .z-report-a4 {
+  body:not(:has(#print-portal:not(:empty))):not(.is-printing-portal) .adisyon-sheet {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
-    max-width: 100%;
     margin: 0;
-    border: 0;
     box-shadow: none;
   }
 
@@ -3213,7 +3395,7 @@ textarea:focus-visible {
   .modal {
     position: static;
     display: block;
-    background: #fcfaf7;
+    background: #ffffff;
     box-shadow: none;
   }
 
@@ -4062,7 +4244,8 @@ body.warm {
 }
 
 .dark .product-meta {
-  color: #9e8d7f;
+  color: #cfc1b4;
+  font-weight: 650;
 }
 
 .dark .cart-head,
@@ -4348,7 +4531,8 @@ body.kiosk-mode .category-tabs,
 body.kiosk-mode .catalog,
 body.kiosk-mode .kasa-catalog-layout,
 body.kiosk-mode .table-order-view,
-body.kiosk-mode .home-container {
+body.kiosk-mode .home-container,
+body.kiosk-mode .activity-logs-container {
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
   touch-action: pan-y;
@@ -4978,4 +5162,31 @@ body.kiosk-mode .total-row {
   .payment-items-list {
     max-height: 240px;
   }
+}
+
+
+.stepper-all-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  height: 26px;
+  font-size: 10.5px;
+  font-weight: 800;
+  border: 1px solid #d5c7bb;
+  border-radius: 7px;
+  color: #6d5a4e;
+  background: #f4ebe3;
+  transition: 0.14s ease;
+  cursor: pointer;
+}
+
+.stepper-all-btn:hover {
+  background: #8a6d57;
+  border-color: #8a6d57;
+  color: #fffdf9;
+}
+
+.masked-text-security {
+  -webkit-text-security: disc;
 }

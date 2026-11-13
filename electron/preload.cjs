@@ -63,7 +63,7 @@ const electronAPI = Object.freeze({
   },
 
   /**
-   * Minimize window (only allowed in development mode)
+   * Minimize the main application window
    */
   minimizeApp: () => ipcRenderer.invoke('minimize-app'),
 

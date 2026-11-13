@@ -185,17 +185,21 @@ function performGracefulQuit() {
  * Create the main application window
  */
 function createMainWindow() {
+  const { workArea } = screen.getPrimaryDisplay()
+
   mainWindow = new BrowserWindow({
-    width: 1920,
-    height: 1080,
-    fullscreen: true,
-    kiosk: !isDev,
-    alwaysOnTop: !isDev,
+    x: workArea.x,
+    y: workArea.y,
+    width: workArea.width,
+    height: workArea.height,
+    show: false,
+    fullscreen: false,
     autoHideMenuBar: true,
     frame: false,
-    resizable: false,
-    minimizable: isDev,
-    movable: isDev,
+    resizable: true,
+    minimizable: true,
+    maximizable: true,
+    movable: true,
     closable: true,
     title: 'LEMOON KAFE - Kasa & Restoran Otomasyonu',
     icon: iconPath,
@@ -203,6 +207,13 @@ function createMainWindow() {
   })
 
   loadMainContent(mainWindow)
+
+  mainWindow.once('ready-to-show', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.maximize()
+      mainWindow.show()
+    }
+  })
 
   // Attach crash & unresponsive recovery handlers (Adım 5)
   crashManager.attachToWindow(mainWindow, () => ensureDbContext().db)
@@ -220,22 +231,7 @@ function createMainWindow() {
     mainWindow.webContents.openDevTools({ mode: 'detach' })
   }
 
-  // 5) Kiosk lock: prevent leaving fullscreen or minimizing in production
-  mainWindow.on('leave-full-screen', () => {
-    if (!isDev && !app.isAuthorizedQuit && mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.setFullScreen(true)
-    }
-  })
-
-  mainWindow.on('minimize', (event) => {
-    if (!isDev && !app.isAuthorizedQuit && mainWindow && !mainWindow.isDestroyed()) {
-      event.preventDefault()
-      mainWindow.restore()
-      mainWindow.focus()
-    }
-  })
-
-  // 5) Kiosk lock: block unauthorized window close (e.g. Alt+F4 or taskbar close) in production
+  // Block unauthorized window close (e.g. Alt+F4 or taskbar close) in production
   mainWindow.on('close', (event) => {
     if (!isDev && !app.isAuthorizedQuit) {
       event.preventDefault()
@@ -261,38 +257,44 @@ function createMainWindow() {
  */
 function openCustomerDisplay() {
   if (customerWindow && !customerWindow.isDestroyed()) {
+    if (customerWindow.isMinimized()) customerWindow.restore()
     customerWindow.focus()
     return { success: true }
   }
 
   const displays = screen.getAllDisplays()
-  const externalDisplay = displays.find((display) => {
-    const primary = screen.getPrimaryDisplay()
-    return display.id !== primary.id
-  })
+  const primary = screen.getPrimaryDisplay()
+  const externalDisplay = displays.find((display) => display.id !== primary.id)
+  const targetDisplay = externalDisplay || primary
+  const { workArea } = targetDisplay
 
   const windowOptions = {
-    width: 1920,
-    height: 1080,
-    fullscreen: true,
-    kiosk: !isDev,
+    x: workArea.x,
+    y: workArea.y,
+    width: workArea.width,
+    height: workArea.height,
+    show: false,
+    fullscreen: false,
     autoHideMenuBar: true,
     frame: false,
-    resizable: false,
-    minimizable: isDev,
-    movable: isDev,
+    resizable: true,
+    minimizable: true,
+    maximizable: true,
+    movable: true,
     title: 'LEMOON KAFE - Müşteri Ekranı',
     icon: iconPath,
     webPreferences: createHardenedWebPreferences(preloadPath, isDev),
   }
 
-  if (externalDisplay) {
-    windowOptions.x = externalDisplay.bounds.x
-    windowOptions.y = externalDisplay.bounds.y
-  }
-
   customerWindow = new BrowserWindow(windowOptions)
   loadCustomerDisplayContent(customerWindow)
+
+  customerWindow.once('ready-to-show', () => {
+    if (customerWindow && !customerWindow.isDestroyed()) {
+      customerWindow.maximize()
+      customerWindow.show()
+    }
+  })
 
   customerWindow.on('close', (event) => {
     if (!isDev && !app.isAuthorizedQuit && mainWindow && !mainWindow.isDestroyed()) {
@@ -354,10 +356,6 @@ ipcMain.handle('minimize-app', (event, ...args) => {
   const argCheck = validateNoArgsPayload(args, 'minimize-app')
   if (!argCheck.valid) {
     return { success: false, error: argCheck.error }
-  }
-  // In packaged kiosk mode, minimizing to desktop is disabled to prevent waiter escape
-  if (!isDev) {
-    return { success: false, error: 'Kiosk modunda pencere küçültme devre dışıdır.' }
   }
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.minimize()

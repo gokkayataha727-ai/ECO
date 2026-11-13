@@ -131,8 +131,15 @@ export async function quitApp(adminUsername: string): Promise<{ success: boolean
 }
 
 export async function minimizeApp(): Promise<void> {
-  if (isElectron()) {
-    await (window as any).electronAPI.minimizeApp()
+  if (isElectron() && typeof (window as any).electronAPI?.minimizeApp === 'function') {
+    try {
+      const res = await (window as any).electronAPI.minimizeApp()
+      if (res && res.success === false) {
+        return
+      }
+    } catch {
+      // Sessizce yut: pencere küçültme hatası uygulamayı bozmamalı
+    }
   }
 }
 

@@ -1,8 +1,8 @@
-import { BarChart3, CircleHelp, MapPin, Settings, Image as ImageIcon, Monitor, Power, ChevronDown, Moon, Sun, LogOut } from 'lucide-react'
+import { BarChart3, CircleHelp, MapPin, Settings, Image as ImageIcon, Monitor, Power, ChevronDown, Moon, Sun, LogOut, Minus } from 'lucide-react'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { AppLogo } from './AppLogo'
-import { openCustomerDisplay, isElectronEnvironment } from '../lib/api'
+import { openCustomerDisplay, minimizeApp, isElectronEnvironment } from '../lib/api'
 import { formatCurrency } from '../lib/format'
 import { can } from '../lib/permissions'
 import type { AppSettings, BusinessDay, Session } from '../types'
@@ -373,6 +373,15 @@ export function TopBar({
         {isElectronEnvironment() && (
           <>
             <button type="button" className="header-icon hidden md:grid" onClick={() => openCustomerDisplay()} title="Müşteri Ekranı" aria-label="Müşteri ekranını aç"><Monitor size={18} /></button>
+            <button
+              type="button"
+              className="header-icon grid"
+              onClick={() => minimizeApp()}
+              title="Alta Al"
+              aria-label="Pencereyi alta al"
+            >
+              <Minus size={18} />
+            </button>
             {userRole === 'admin' && onRequestAdminExit && (
               <button
                 type="button"

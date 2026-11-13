@@ -45,9 +45,16 @@ describe('E. Electron Security Hardening & Kiosk Protection Suite (ADIM 3)', () 
     expect(security.isBlockedShortcut({ key: 'R', control: true, shift: true }, false)).toBe(true)
     expect(security.isBlockedShortcut({ key: 'F5' }, false)).toBe(true)
     expect(security.isBlockedShortcut({ key: 'w', control: true }, false)).toBe(true)
+    expect(security.isBlockedShortcut({ key: 'q', control: true }, false)).toBe(true)
     expect(security.isBlockedShortcut({ key: 'F4', alt: true }, false)).toBe(true)
     expect(security.isBlockedShortcut({ key: ' ', code: 'Space', alt: true }, false)).toBe(true)
     expect(security.isBlockedShortcut({ key: 'F11' }, false)).toBe(true)
+
+    // Minimize/Hide shortcuts (Ctrl+M, Ctrl+H) are allowed since kiosk lock was removed
+    expect(security.isBlockedShortcut({ key: 'm', control: true }, false)).toBe(false)
+    expect(security.isBlockedShortcut({ key: 'h', control: true }, false)).toBe(false)
+    expect(security.isBlockedShortcut({ key: 'm', meta: true }, false)).toBe(false)
+    expect(security.isBlockedShortcut({ key: 'h', meta: true }, false)).toBe(false)
 
     // Secret Admin Exit shortcut (Ctrl+Shift+Q) is allowed through to renderer
     expect(security.isBlockedShortcut({ key: 'Q', control: true, shift: true }, false)).toBe(false)

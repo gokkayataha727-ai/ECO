@@ -111,7 +111,7 @@ function isBlockedShortcut(input, isDev = false) {
   }
 
   // Block Ctrl/Cmd + W (Close tab/window) and Ctrl/Cmd + Q (Quit without shift)
-  if (ctrlOrCmd && !shift && (upperKey === 'W' || upperKey === 'Q' || upperKey === 'M' || upperKey === 'H')) {
+  if (ctrlOrCmd && !shift && (upperKey === 'W' || upperKey === 'Q')) {
     return true
   }
 

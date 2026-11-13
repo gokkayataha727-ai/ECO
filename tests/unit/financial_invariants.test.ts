@@ -207,6 +207,7 @@ describe('B. Financial and Business-Day Correctness Suite', () => {
     expect(report.totalRevenue).toBe(250)
     expect(report.paymentDistribution.card).toBe(200)
     expect(report.paymentDistribution.cash).toBe(50)
+    expect(report.totalTax).toBe(20) // 10% KDV applied only to card payments (200 * 0.10 = 20)
     expect(roundCurrency(report.paymentDistribution.card + report.paymentDistribution.cash + report.paymentDistribution.iban)).toBe(report.totalRevenue)
 
     // 2. Order count, paidTablesTotal & grossItemsRevenue consistency
@@ -247,6 +248,7 @@ describe('B. Financial and Business-Day Correctness Suite', () => {
     expect(report.totalRevenue).toBe(60)
     expect(report.totalRefunds).toBe(40)
     expect(report.paymentDistribution.card).toBe(60)
+    expect(report.totalTax).toBe(6)
 
     // Edge case: Refund amount exceeds revenue (e.g. administrative adjustment)
     const excessRefund = createMockRefund({
@@ -257,6 +259,7 @@ describe('B. Financial and Business-Day Correctness Suite', () => {
     const clampedReport = buildReportFromOrders([order], 10, undefined, day.id, [excessRefund])
     expect(clampedReport.totalRevenue).toBe(0)
     expect(clampedReport.paymentDistribution.card).toBe(0)
+    expect(clampedReport.totalTax).toBe(0)
   })
 
   // Requirement B.7: Cancellations, re-opened orders, and re-payment flows do not duplicate or omit revenue
@@ -581,5 +584,107 @@ describe('B. Financial and Business-Day Correctness Suite', () => {
     expect(fullReport.grossItemsRevenue).toBe(560)
     // Ödenen Masalar Toplamı = 180 (closedOrder collected payments, oldRefund excluded by dateRange)
     expect(fullReport.paidTablesTotal).toBe(180)
+  })
+
+  // Requirement B.14: 10% KDV applies strictly to card payments (card * rate / 100), excluding cash/IBAN, and deducts card refunds
+  it('B.14: KDV (%10) applies only to net card payments across single, split, legacy, cancelled/reopened, and refunded orders', () => {
+    const day = createMockBusinessDay({ id: 'day-kdv-card-only', status: 'open' })
+
+    // 1. Cash-only and IBAN-only orders -> 0 KDV
+    const cashOnly = createMockOrder({
+      businessDayId: day.id,
+      totals: { subtotal: 300, discount: 0, total: 300 },
+      taxRate: 10,
+      paymentMethod: 'cash',
+      payments: [createMockPayment({ method: 'cash', amount: 300 })],
+    })
+    const ibanOnly = createMockOrder({
+      businessDayId: day.id,
+      totals: { subtotal: 250, discount: 0, total: 250 },
+      taxRate: 10,
+      paymentMethod: 'iban',
+      payments: [createMockPayment({ method: 'iban', amount: 250 })],
+    })
+
+    const nonCardReport = buildReportFromOrders([cashOnly, ibanOnly], 10, undefined, day.id, [])
+    expect(nonCardReport.totalRevenue).toBe(550)
+    expect(nonCardReport.totalTax).toBe(0)
+
+    // 2. Mixed/split payment (100 card + 50 cash + 50 iban) -> KDV = 100 * 0.10 = 10
+    const splitOrder = createMockOrder({
+      businessDayId: day.id,
+      totals: { subtotal: 200, discount: 0, total: 200 },
+      taxRate: 10,
+      paymentMethod: 'mixed',
+      payments: [
+        createMockPayment({ method: 'card', amount: 100 }),
+        createMockPayment({ method: 'cash', amount: 50 }),
+        createMockPayment({ method: 'iban', amount: 50 }),
+      ],
+    })
+
+    // 3. Legacy order without payments array (paymentMethod: 'card', 150 TL -> 15 TL KDV)
+    const legacyCardOrder = createMockOrder({
+      businessDayId: day.id,
+      totals: { subtotal: 150, discount: 0, total: 150 },
+      taxRate: 10,
+      paymentMethod: 'card',
+      payments: undefined,
+    })
+
+    // 4. Cancelled & reopened card orders must NOT contribute to KDV
+    const cancelledCard = createMockOrder({
+      businessDayId: day.id,
+      totals: { subtotal: 500, discount: 0, total: 500 },
+      taxRate: 10,
+      paymentMethod: 'card',
+      payments: [createMockPayment({ method: 'card', amount: 500 })],
+      cancelled: true,
+    })
+    const reopenedCard = createMockOrder({
+      businessDayId: day.id,
+      totals: { subtotal: 400, discount: 0, total: 400 },
+      taxRate: 10,
+      paymentMethod: 'card',
+      payments: [createMockPayment({ method: 'card', amount: 400 })],
+      reopened: true,
+    })
+
+    // 5. Card refund of 50 TL and cash refund of 100 TL
+    const cardRefund = createMockRefund({
+      businessDayId: day.id,
+      amount: 50,
+      paymentMethod: 'card',
+    })
+    const cashRefund = createMockRefund({
+      businessDayId: day.id,
+      amount: 100,
+      paymentMethod: 'cash',
+    })
+
+    // Net card = 100 + 150 - 50 = 200 -> KDV = 20.00
+    const mixedReport = buildReportFromOrders(
+      [cashOnly, ibanOnly, splitOrder, legacyCardOrder, cancelledCard, reopenedCard],
+      10,
+      undefined,
+      day.id,
+      [cardRefund, cashRefund],
+    )
+    expect(mixedReport.paymentDistribution.card).toBe(200)
+    expect(mixedReport.totalTax).toBe(20)
+
+    // 6. Precision check: 33.35 + 33.35 + 33.30 = 100.00 card -> exact 10.00 KDV without 1-kuruş drift
+    const decimalOrders = [33.35, 33.35, 33.3].map((amt) =>
+      createMockOrder({
+        businessDayId: day.id,
+        totals: { subtotal: amt, discount: 0, total: amt },
+        taxRate: 10,
+        paymentMethod: 'card',
+        payments: [createMockPayment({ method: 'card', amount: amt })],
+      }),
+    )
+    const decimalReport = buildReportFromOrders(decimalOrders, 10, undefined, day.id, [])
+    expect(decimalReport.paymentDistribution.card).toBe(100)
+    expect(decimalReport.totalTax).toBe(10)
   })
 })

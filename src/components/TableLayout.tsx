@@ -59,7 +59,9 @@ interface TableLayoutProps {
 }
 
 const getItemCount = (table: Table): number =>
-  table.cart.reduce((sum, item) => sum + item.quantity, 0)
+  table.cart
+    .filter((item) => item.status !== 'refunded')
+    .reduce((sum, item) => sum + item.quantity, 0)
 
 export function TableLayout({
   tables,
@@ -93,6 +95,7 @@ export function TableLayout({
   const [reopenSelectorOpen, setReopenSelectorOpen] = useState(false)
   const [reopenSearchQuery, setReopenSearchQuery] = useState('')
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const toastTimerRef = useRef<number | null>(null)
 
@@ -204,15 +207,78 @@ export function TableLayout({
   )
 
   useEffect(() => {
+    if (!openMenuTableId) return
     const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+      const target = event.target as Node | null
+      if (!target) return
+      if (menuRef.current?.contains(target)) return
+      const targetElement = target instanceof Element ? target : target.parentElement
+      if (targetElement?.closest('[data-table-menu-trigger]')) return
+      if (
+        containerRef.current &&
+        target === containerRef.current &&
+        event.clientX >=
+          containerRef.current.getBoundingClientRect().left + containerRef.current.clientWidth
+      ) {
+        return
+      }
+      setOpenMenuTableId(null)
+    }
+    const handleMenuEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
         setOpenMenuTableId(null)
       }
     }
-    if (openMenuTableId) {
-      document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('click', handleClickOutside, true)
+    window.addEventListener('keydown', handleMenuEscape, true)
+    return () => {
+      document.removeEventListener('click', handleClickOutside, true)
+      window.removeEventListener('keydown', handleMenuEscape, true)
     }
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [openMenuTableId])
+
+  useEffect(() => {
+    if (!openMenuTableId) return
+    const container = containerRef.current
+    const menu = menuRef.current
+    if (!container || !menu) return
+
+    const containerRect = container.getBoundingClientRect()
+    const offsetParent = menu.offsetParent as HTMLElement | null
+    const menuTop = offsetParent
+      ? offsetParent.getBoundingClientRect().top + menu.offsetTop
+      : menu.getBoundingClientRect().top
+    const menuHeight = menu.offsetHeight || menu.getBoundingClientRect().height
+    const menuBottom = menuTop + menuHeight
+    const bottomBreathingRoom = 20
+
+    const overflowBottom = menuBottom + bottomBreathingRoom - containerRect.bottom
+    if (overflowBottom > 0) {
+      const maxSafeDelta = Math.max(0, menuTop - containerRect.top - 12)
+      const delta = Math.min(overflowBottom, maxSafeDelta)
+      if (delta > 0) {
+        const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
+        const targetTop = Math.min(container.scrollTop + delta, maxScrollTop)
+        if (typeof container.scrollTo === 'function') {
+          container.scrollTo({ top: targetTop, behavior: 'smooth' })
+        } else {
+          container.scrollTop = targetTop
+        }
+      }
+      return
+    }
+
+    const overflowTop = containerRect.top + 12 - menuTop
+    if (overflowTop > 0) {
+      const targetTop = Math.max(0, container.scrollTop - overflowTop)
+      if (typeof container.scrollTo === 'function') {
+        container.scrollTo({ top: targetTop, behavior: 'smooth' })
+      } else {
+        container.scrollTop = targetTop
+      }
+    }
   }, [openMenuTableId])
 
   useEffect(() => {
@@ -265,7 +331,7 @@ export function TableLayout({
   )
 
   return (
-    <div className="tables-container catalog">
+    <div ref={containerRef} className="tables-container">
       <div className="tables-header flex items-center justify-between mb-4">
         <div>
           <h2 className="section-title">Masalar</h2>
@@ -352,12 +418,13 @@ export function TableLayout({
           const hasCustomer = Boolean(table.customerName && table.customerName.trim().length > 0)
           const isOccupied = isTableOccupied(table)
           const isMenuOpen = openMenuTableId === table.id
+          const hasActiveItems = table.cart.some((item) => item.status !== 'refunded')
           const canMove = canTransferMerge && isOccupied && emptyTables.length > 0
           const canMerge =
             canTransferMerge && isOccupied && tables.some((t) => t.id !== table.id && isTableOccupied(t))
-          const canSplit = canTransferMerge && isOccupied && table.cart.length > 0 && tables.length > 1
+          const canSplit = canTransferMerge && isOccupied && hasActiveItems && tables.length > 1
           const showTopSection =
-            isOccupied && (table.cart.length > 0 || canMove || canMerge || canSplit)
+            isOccupied && (hasActiveItems || canMove || canMerge || canSplit)
 
           return (
             <div
@@ -386,6 +453,7 @@ export function TableLayout({
                 {/* 3-dots Action Menu Button */}
                 <button
                   type="button"
+                  data-table-menu-trigger={table.id}
                   onClick={(e) => {
                     e.stopPropagation()
                     setOpenMenuTableId(isMenuOpen ? null : table.id)
@@ -402,11 +470,11 @@ export function TableLayout({
                   <div
                     ref={menuRef}
                     onClick={(e) => e.stopPropagation()}
-                    className="absolute top-11 right-2 w-48 bg-white dark:bg-[#26201c] rounded-xl shadow-xl border border-gray-200 dark:border-[#3d332c] py-1.5 z-30 animate-in fade-in zoom-in-95 duration-100 text-sm font-medium text-gray-700 dark:text-stone-200"
+                    className="table-menu-dropdown absolute top-11 right-2 w-48 bg-white dark:bg-[#26201c] rounded-xl shadow-xl border border-gray-200 dark:border-[#3d332c] py-1.5 z-30 animate-in fade-in zoom-in-95 duration-100 text-sm font-medium text-gray-700 dark:text-stone-200"
                   >
                     {showTopSection && (
                       <>
-                        {table.cart.length > 0 && (
+                        {hasActiveItems && (
                           <>
                             <button
                               type="button"
@@ -552,7 +620,7 @@ export function TableLayout({
                 <span className={`text-sm font-bold ${isOccupied ? 'text-[#8c5c3d] dark:text-amber-400' : 'text-[#6b584b] dark:text-stone-300'}`}>
                   {isOccupied ? (paidTotal > 0 ? 'Kısmi Ödendi' : 'Dolu') : 'Boş'}
                 </span>
-                {isOccupied && table.cart.length > 0 && (
+                {isOccupied && hasActiveItems && (
                   <span className="font-black text-[#2d1e15] dark:text-stone-100 text-base">
                     {paidTotal > 0 ? `Kalan: ${formatCurrency(remaining)}` : formatCurrency(total)}
                   </span>

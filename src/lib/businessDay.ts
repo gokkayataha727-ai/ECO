@@ -300,21 +300,39 @@ export const calculateDayCardBreakdown = (
 export const getOrderItemNetRevenues = (items: CartItem[], orderNetRevenue: number): number[] => {
   if (items.length === 0) return []
   const target = roundCurrency(orderNetRevenue)
-  const rawAfterItemDisc = items.map((item) => getLineAfterItemDiscount(item))
+  const rawAfterItemDisc = items.map((item) => {
+    if (item.status === 'refunded' && !item.refundedQty) return 0
+    const effectiveQty = Math.max(0, item.quantity - (item.refundedQty || 0))
+    if (effectiveQty <= 0 || item.quantity <= 0) return 0
+    return (getLineAfterItemDiscount(item) / item.quantity) * effectiveQty
+  })
   const totalAfterItemDisc = rawAfterItemDisc.reduce((sum, v) => sum + v, 0)
 
   if (totalAfterItemDisc <= 0) {
     return items.map(() => 0)
   }
 
+  let lastActiveIdx = -1
+  for (let i = rawAfterItemDisc.length - 1; i >= 0; i--) {
+    if (rawAfterItemDisc[i] > 0) {
+      lastActiveIdx = i
+      break
+    }
+  }
+
   const nets: number[] = []
   let running = 0
-  for (let i = 0; i < items.length - 1; i++) {
-    const share = roundCurrency((rawAfterItemDisc[i] / totalAfterItemDisc) * target)
-    nets.push(share)
-    running = roundCurrency(running + share)
+  for (let i = 0; i < items.length; i++) {
+    if (rawAfterItemDisc[i] <= 0) {
+      nets.push(0)
+    } else if (i === lastActiveIdx) {
+      nets.push(Math.max(0, roundCurrency(target - running)))
+    } else {
+      const share = roundCurrency((rawAfterItemDisc[i] / totalAfterItemDisc) * target)
+      nets.push(share)
+      running = roundCurrency(running + share)
+    }
   }
-  nets.push(Math.max(0, roundCurrency(target - running)))
   return nets
 }
 
@@ -362,7 +380,7 @@ export const buildReportFromOrders = (
   let totalRevenue = 0
   let grossItemsRevenue = 0
   let totalDiscount = 0
-  let totalTax = 0
+  let rawCardTax = 0
   let cardTotal = 0
   let cashTotal = 0
   let ibanTotal = 0
@@ -403,8 +421,9 @@ export const buildReportFromOrders = (
     totalDiscount = roundCurrency(totalDiscount + orderDisc)
 
     const rate = typeof order.taxRate === 'number' ? order.taxRate : defaultTaxRate
-    const orderTax = rate > 0 ? roundCurrency((orderRev * rate) / (100 + rate)) : 0
-    totalTax = roundCurrency(totalTax + orderTax)
+    if (rate > 0 && applied.card > 0) {
+      rawCardTax += (applied.card * rate) / 100
+    }
 
     const orderDate = new Date(order.date)
     const hour = Number.isNaN(orderDate.getTime()) ? 0 : orderDate.getHours()
@@ -419,8 +438,7 @@ export const buildReportFromOrders = (
       const effectiveQty = Math.max(0, item.quantity - (item.refundedQty || 0))
       if (effectiveQty <= 0) return
 
-      const rawLineRev = lineNets[idx] ?? 0
-      const lineRev = item.quantity > 0 ? roundCurrency((rawLineRev / item.quantity) * effectiveQty) : 0
+      const lineRev = roundCurrency(lineNets[idx] ?? 0)
       const qty = effectiveQty
       const productKey = item.id || item.name
       const categoryName = item.category || 'Diğer'
@@ -510,6 +528,9 @@ export const buildReportFromOrders = (
     totalRefunds = roundCurrency(totalRefunds + amt)
     if (r.paymentMethod === 'card') {
       cardTotal = Math.max(0, roundCurrency(cardTotal - amt))
+      if (defaultTaxRate > 0) {
+        rawCardTax -= (amt * defaultTaxRate) / 100
+      }
     } else if (r.paymentMethod === 'iban') {
       ibanTotal = Math.max(0, roundCurrency(ibanTotal - amt))
     } else {
@@ -517,6 +538,7 @@ export const buildReportFromOrders = (
     }
   }
 
+  const totalTax = cardTotal <= 0 ? 0 : Math.max(0, roundCurrency(rawCardTax))
   const netRevenue = Math.max(0, roundCurrency(totalRevenue - totalRefunds))
 
   const orderCount = validOrders.length
@@ -704,7 +726,7 @@ export const exportReportToCsv = (
   rows.push(['Toplam Ciro (TL)', formatNum(report.grossItemsRevenue ?? report.totalRevenue)])
   rows.push(['Sipariş Sayısı', String(report.orderCount)])
   rows.push(['Ödenen Masalar Toplamı (TL)', formatNum(report.paidTablesTotal ?? report.totalRevenue)])
-  rows.push(['Toplam KDV (TL)', formatNum(report.totalTax)])
+  rows.push(['Toplam KDV (Sadece Kart) (TL)', formatNum(report.totalTax)])
   rows.push(['Toplam İndirim (TL)', formatNum(report.totalDiscount)])
   rows.push(['Toplam İade (TL)', formatNum(report.totalRefunds || 0)])
   rows.push(['İptal Edilen Sipariş Sayısı', String(report.cancelledCount)])

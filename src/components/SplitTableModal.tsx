@@ -46,8 +46,9 @@ export function SplitTableModal({
         sourceTable.cart,
         sourceTable.discountRate || 0,
         sourceTable.payments,
+        sourceTable.discountAmount || 0,
       ),
-    [sourceTable.cart, sourceTable.discountRate, sourceTable.payments],
+    [sourceTable.cart, sourceTable.discountRate, sourceTable.payments, sourceTable.discountAmount],
   )
 
   const lineStateMap = useMemo(
@@ -59,6 +60,7 @@ export function SplitTableModal({
   const selectableItems = useMemo(
     () =>
       sourceTable.cart.filter((item) => {
+        if (item.status === 'refunded') return false
         const ls = lineStateMap.get(item.cartItemId)
         return ls ? ls.unpaidQty > 0 : item.quantity > 0
       }),

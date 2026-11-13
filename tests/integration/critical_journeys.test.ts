@@ -174,6 +174,7 @@ describe('C. Critical User-Journey Integration Suite', () => {
     const reloadedDays = getBusinessDaysSafe()
     expect(reloadedDays[0].status).toBe('closed')
     expect(reloadedDays[0].report?.totalRevenue).toBe(144)
+    expect(reloadedDays[0].report?.totalTax).toBe(10)
     expect(reloadedDays[0].report?.paymentDistribution.card).toBe(100)
     expect(reloadedDays[0].report?.paymentDistribution.cash).toBe(44)
     expect(reloadedDays[0].expectedCash).toBe(544)

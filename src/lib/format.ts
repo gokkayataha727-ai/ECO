@@ -108,17 +108,19 @@ export const deriveLinePaymentStates = (
   payments: PartialPayment[] = [],
   discountAmount = 0,
 ): LinePaymentState[] => {
-  const totals = calculateTotals(cart, discountRate, discountAmount)
+  // İade edilen kalemler adisyonda geçmiş amaçlı tutulsa da ödeme dağılımına ve indirim paylaştırmasına dahil edilmez.
+  const activeCart = cart.filter((item) => item.status !== 'refunded')
+  const totals = calculateTotals(activeCart, discountRate, discountAmount)
   const grandTotal = roundCurrency(totals.total)
-  const discountedSubtotal = cart.reduce((sum, item) => sum + getLineAfterItemDiscount(item), 0)
+  const discountedSubtotal = activeCart.reduce((sum, item) => sum + getLineAfterItemDiscount(item), 0)
 
-  const rawLineNets = cart.map((item) => {
+  const rawLineNets = activeCart.map((item) => {
     const afterItemDisc = getLineAfterItemDiscount(item)
     if (discountedSubtotal <= 0) return 0
     return (afterItemDisc / discountedSubtotal) * grandTotal
   })
 
-  return cart.map((item, idx) => {
+  return activeCart.map((item, idx) => {
     const unitGrossPrice = getEffectivePrice(item)
     const lineGrossTotal = roundCurrency(unitGrossPrice * item.quantity)
     const lineNetTotal = roundCurrency(rawLineNets[idx])
@@ -268,12 +270,16 @@ const mergeCartItemsWithMap = (
     const srcOptSig = getOptionsSignature(sourceItem.selectedOptions)
     const srcDiscSig = getDiscountSignature(sourceItem.itemDiscount)
 
-    const matchIndex = merged.findIndex(
-      (existing) =>
-        existing.id === sourceItem.id &&
-        getOptionsSignature(existing.selectedOptions) === srcOptSig &&
-        getDiscountSignature(existing.itemDiscount) === srcDiscSig,
-    )
+    const isSourceRefunded = sourceItem.status === 'refunded'
+    const matchIndex = isSourceRefunded
+      ? -1
+      : merged.findIndex(
+          (existing) =>
+            existing.status !== 'refunded' &&
+            existing.id === sourceItem.id &&
+            getOptionsSignature(existing.selectedOptions) === srcOptSig &&
+            getDiscountSignature(existing.itemDiscount) === srcDiscSig,
+        )
 
     if (matchIndex >= 0) {
       merged[matchIndex] = {
@@ -447,6 +453,7 @@ export const splitTableOrder = (
     sourceTable.cart,
     sourceTable.discountRate || 0,
     sourceTable.payments,
+    sourceTable.discountAmount || 0,
   )
   const lineStateMap = new Map(lineStates.map((ls) => [ls.cartItemId, ls]))
 
@@ -456,7 +463,7 @@ export const splitTableOrder = (
 
   for (const splitReq of validSelections) {
     const sourceItem = sourceTable.cart.find((i) => i.cartItemId === splitReq.cartItemId)
-    if (!sourceItem) return tables // Ürün bulunamadı, işlemi atomik olarak iptal et
+    if (!sourceItem || sourceItem.status === 'refunded') return tables // Ürün bulunamadı veya iade edilmiş, işlemi atomik olarak iptal et
 
     const lineState = lineStateMap.get(sourceItem.cartItemId)
     const maxUnpaid = lineState ? lineState.unpaidQty : sourceItem.quantity
@@ -508,8 +515,9 @@ export const splitTableOrder = (
 
   return tables.map((t) => {
     if (t.id === sourceTableId) {
-      if (newSourceCart.length === 0) {
-        // Kaynak masada hiç ürün kalmadıysa tamamen boşalt
+      const hasActiveSourceItems = newSourceCart.some((item) => item.status !== 'refunded')
+      if (!hasActiveSourceItems) {
+        // Kaynak masada hiç aktif ürün kalmadıysa tamamen boşalt
         return {
           ...t,
           status: 'empty',
@@ -517,6 +525,7 @@ export const splitTableOrder = (
           note: '',
           customerName: '',
           discountRate: 0,
+          discountAmount: 0,
           payments: [],
         }
       }

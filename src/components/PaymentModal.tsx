@@ -142,7 +142,10 @@ export function PaymentModal({
   const hasItemSelection = selectedPayment.items.length > 0
 
   const totalOrderUnits = useMemo(
-    () => cart.reduce((sum, item) => sum + item.quantity, 0),
+    () =>
+      cart
+        .filter((item) => item.status !== 'refunded')
+        .reduce((sum, item) => sum + item.quantity, 0),
     [cart],
   )
 

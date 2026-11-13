@@ -1735,26 +1735,33 @@ function App() {
           details: `${targetTable.name} masası tamamen iade edildi. Tutar: ${formatCurrency(totalAmount)}. Neden: ${params.reason}`,
         })
 
-        // Mark table items as refunded and clear table
+        // Clear table completely after full table refund (refund details are stored in refunds & activity logs)
         setTables((current) =>
           current.map((t) =>
             t.id === targetTable.id
               ? {
                   ...t,
-                  cart: t.cart.map((i) => ({
-                    ...i,
-                    status: 'refunded' as const,
-                    refundedQty: i.quantity,
-                    refundReason: params.reason,
-                    refundedAt: nowIso,
-                    refundedBy: userName,
-                  })),
+                  cart: [],
+                  discountRate: 0,
+                  discountAmount: 0,
+                  note: '',
+                  customerName: '',
                   payments: [],
                   status: 'empty' as const,
                 }
               : t,
           ),
         )
+        setTableBatches((prev) => {
+          const next = { ...prev }
+          delete next[targetTable.id]
+          return next
+        })
+        if (tableBatchesRef.current[targetTable.id]) {
+          const nextRef = { ...tableBatchesRef.current }
+          delete nextRef[targetTable.id]
+          tableBatchesRef.current = nextRef
+        }
 
         if (activeTableId === targetTable.id) {
           setActiveTableId(null)

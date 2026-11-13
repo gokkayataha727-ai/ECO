@@ -157,6 +157,41 @@ describe('PrintPortal & Multi-Page Z-Report Pagination Suite', () => {
     expect(portal?.querySelector('.z-report-kpi-grid')).not.toBeNull()
     expect(portal?.querySelector('.z-report-breakdown-grid')).not.toBeNull()
     expect(portal?.querySelector('.z-report-footer')).not.toBeNull()
+    expect(portal?.textContent).toContain('TOPLAM KDV (%10 · KART)')
+  })
+
+  it('renders 80mm receipt mode with card-specific KDV label', async () => {
+    const mockReport: BusinessDayReportSnapshot = {
+      generatedAt: '2026-11-12T19:30:00.000Z',
+      totalRevenue: 150,
+      totalTax: 10,
+      totalDiscount: 0,
+      orderCount: 1,
+      paymentDistribution: {
+        cash: 50,
+        card: 100,
+        iban: 0,
+      },
+      soldProducts: [],
+      categorySales: [],
+      hourlySales: [],
+      cancelledCount: 0,
+      cancelledTotal: 0,
+      cancelledOrders: [],
+    }
+
+    await act(async () => {
+      root?.render(
+        <PrintPortal>
+          <div className="print-container print-receipt">
+            <ZReportPrintView report={mockReport} titleLabel="Test" mode="receipt" />
+          </div>
+        </PrintPortal>,
+      )
+    })
+
+    const portal = document.getElementById('print-portal')
+    expect(portal?.textContent).toContain('Toplam KDV (%10 · Kart)')
   })
 
   it('sanitizes document.title cleanly for multi-page PDF download filename', () => {

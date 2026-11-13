@@ -1132,7 +1132,7 @@ export function ReportsModal({
                     <FileText size={18} />
                   </div>
                   <div className="text-xs font-black text-[#6d5a4e]">
-                    Toplam KDV (%{taxRate})
+                    Toplam KDV (%{taxRate} · Kart)
                   </div>
                   <div className="text-2xl font-black text-[#2d1e15] mt-0.5">
                     {formatCurrency(activeReport.totalTax)}

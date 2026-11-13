@@ -2784,6 +2784,24 @@ textarea:focus-visible {
 .tables-container {
   width: min(1480px, 100%);
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  padding: 20px 20px 44px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(138, 109, 87, 0.45) rgba(244, 235, 227, 0.5);
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
+.dark .tables-container {
+  scrollbar-color: rgba(180, 145, 118, 0.45) rgba(36, 30, 26, 0.5);
 }
 
 .tables-header {
@@ -2793,6 +2811,16 @@ textarea:focus-visible {
 .tables-grid {
   animation: page-fade-in .4s ease-out both;
   animation-delay: .08s;
+}
+
+.table-menu-dropdown::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  height: 20px;
+  pointer-events: none;
 }
 
 /* ═══════════════════════════════════════
@@ -3011,6 +3039,10 @@ textarea:focus-visible {
     padding: 14px;
   }
 
+  .tables-container {
+    padding: 14px 14px 36px;
+  }
+
   .cart-panel {
     position: static;
   }
@@ -3077,6 +3109,10 @@ textarea:focus-visible {
   .catalog {
     padding: 18px;
     border-radius: 17px;
+  }
+
+  .tables-container {
+    padding: 14px 14px 36px;
   }
 
   .section-title {
@@ -4528,6 +4564,7 @@ body.kiosk-mode .cart-items,
 body.kiosk-mode .product-grid,
 body.kiosk-mode .category-tabs,
 body.kiosk-mode .catalog,
+body.kiosk-mode .tables-container,
 body.kiosk-mode .kasa-catalog-layout,
 body.kiosk-mode .table-order-view,
 body.kiosk-mode .home-container,

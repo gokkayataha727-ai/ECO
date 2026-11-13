@@ -19,6 +19,7 @@ export function ZReportPrintView({
 }: ZReportPrintViewProps) {
   const storeName = settings?.storeName || 'LEMOON KAFE'
   const location = settings?.location || 'LEMOON KAFE · SIMAV'
+  const taxRate = settings?.taxRate ?? 10
 
   const openedTimeStr = day
     ? new Date(day.openedAt).toLocaleString('tr-TR', {
@@ -124,7 +125,7 @@ export function ZReportPrintView({
             </strong>
           </div>
           <div className="z-report-kpi-card p-2.5 rounded-xl bg-stone-50 border border-stone-200">
-            <span className="text-[10px] text-stone-500 font-bold block">TOPLAM KDV</span>
+            <span className="text-[10px] text-stone-500 font-bold block">TOPLAM KDV (%{taxRate} · KART)</span>
             <strong className="text-sm font-extrabold text-stone-900">
               {formatCurrency(report.totalTax)}
             </strong>
@@ -332,7 +333,7 @@ export function ZReportPrintView({
           <span>-{formatCurrency(report.totalDiscount)}</span>
         </div>
         <div className="receipt-line">
-          <span>Toplam KDV</span>
+          <span>Toplam KDV (%{taxRate} · Kart)</span>
           <span>{formatCurrency(report.totalTax)}</span>
         </div>
         <div className="receipt-line receipt-total">

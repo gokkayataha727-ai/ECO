@@ -153,4 +153,97 @@ describe('TableLayout Modal Portal & Overlay Layout Suite', () => {
       expect(document.body.querySelector(`[role="dialog"][aria-label="${ariaLabel}"]`)).toBeNull()
     }
   })
+
+  it('uses .tables-container without .catalog clipping and smoothly scrolls overflowing bottom menus into view', () => {
+    renderTableLayout()
+
+    const tablesContainer = rootContainer!.querySelector('.tables-container') as HTMLDivElement | null
+    expect(tablesContainer).not.toBeNull()
+    expect(tablesContainer!.classList.contains('catalog')).toBe(false)
+
+    Object.defineProperty(tablesContainer!, 'clientHeight', { configurable: true, value: 600 })
+    Object.defineProperty(tablesContainer!, 'scrollHeight', { configurable: true, value: 960 })
+    tablesContainer!.scrollTop = 0
+
+    const scrollToMock = vi.fn()
+    tablesContainer!.scrollTo = scrollToMock
+
+    const rectSpy = vi
+      .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+      .mockImplementation(function (this: HTMLElement) {
+        if (this.classList.contains('tables-container')) {
+          return {
+            top: 100,
+            bottom: 700,
+            left: 0,
+            right: 1200,
+            width: 1200,
+            height: 600,
+            x: 0,
+            y: 100,
+            toJSON: () => ({}),
+          } as DOMRect
+        }
+        if (this.classList.contains('table-menu-dropdown')) {
+          return {
+            top: 650,
+            bottom: 950,
+            left: 1000,
+            right: 1192,
+            width: 192,
+            height: 300,
+            x: 1000,
+            y: 650,
+            toJSON: () => ({}),
+          } as DOMRect
+        }
+        return {
+          top: 0,
+          bottom: 0,
+          left: 0,
+          right: 0,
+          width: 0,
+          height: 0,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        } as DOMRect
+      })
+
+    try {
+      const menuBtn = rootContainer!.querySelector(
+        'button[aria-label="Masa 1 için masa menüsü"]',
+      ) as HTMLButtonElement | null
+      expect(menuBtn).not.toBeNull()
+
+      act(() => {
+        menuBtn!.click()
+      })
+
+      const dropdown = rootContainer!.querySelector('.table-menu-dropdown')
+      expect(dropdown).not.toBeNull()
+      expect(dropdown!.textContent).toContain('Masayı Taşı')
+      expect(dropdown!.textContent).toContain('Masayı Kapat')
+      expect(scrollToMock).toHaveBeenCalledWith({ top: 270, behavior: 'smooth' })
+
+      // Clicking the same trigger toggles the menu closed cleanly
+      act(() => {
+        menuBtn!.click()
+      })
+      expect(rootContainer!.querySelector('.table-menu-dropdown')).toBeNull()
+
+      // Re-open and verify Escape closes the dropdown menu
+      act(() => {
+        menuBtn!.click()
+      })
+      expect(rootContainer!.querySelector('.table-menu-dropdown')).not.toBeNull()
+
+      act(() => {
+        window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      })
+      expect(rootContainer!.querySelector('.table-menu-dropdown')).toBeNull()
+    } finally {
+      rectSpy.mockRestore()
+    }
+  })
 })

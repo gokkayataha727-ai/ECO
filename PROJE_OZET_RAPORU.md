@@ -1,7 +1,7 @@
 # LEMOON KAFE POS — Kapsamlı Proje Özeti, Kullanım Haritası ve Temizlik Raporu
 
 **Proje Adı:** LEMOON KAFE POS (`eco-coffee-pos`)  
-**Sürüm:** v1.6.0  
+**Sürüm:** v1.7.0  
 **Rapor Tarihi:** 13 Kasım 2026  
 **Platform / Hedef:** Windows POS Dokunmatik Terminalleri & Masaüstü (Electron) / Modern Web  
 **Uygulama Tipi:** Çevrimdışı Öncelikli (Offline-First) Kafe & Restoran Kasa, Masa ve Adisyon Otomasyon Sistemi
@@ -67,7 +67,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                        LEMOON KAFE POS v1.6.0                           │
+│                        LEMOON KAFE POS v1.7.0                           │
 ├───────────────────────────────────┬─────────────────────────────────────┤
 │   Ana Kasa Ekranı (workArea max.) │   Müşteri İkinci Ekranı             │
 │   index.html -> src/main.tsx      │   customer-display.html             │

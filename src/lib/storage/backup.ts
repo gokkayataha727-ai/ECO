@@ -95,7 +95,7 @@ export function createFullBackupFile(description?: string): POSBackupFile {
   return {
     formatVersion: BACKUP_FORMAT_VERSION,
     schemaVersion: CURRENT_STORAGE_SCHEMA_VERSION,
-    appVersion: '1.5.0',
+    appVersion: '1.6.0',
     createdAt: new Date().toISOString(),
     checksum,
     description: description || 'Manuel sistem yedeği',

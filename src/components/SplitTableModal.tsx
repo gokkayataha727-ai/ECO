@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react'
+import { BodyPortal } from './BodyPortal'
 import {
   Split,
   X,
@@ -210,13 +211,14 @@ export function SplitTableModal({
   }, [step, totalSelectedUnits, targetTableId, isSubmitting, onClose, handleConfirm])
 
   return (
-    <div
-      className="overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Masayı Ayır"
-      onClick={onClose}
-    >
+    <BodyPortal>
+      <div
+        className="overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Masayı Ayır"
+        onClick={onClose}
+      >
       <div
         className="modal max-w-2xl w-[95vw] sm:w-[580px]"
         onClick={(e) => e.stopPropagation()}
@@ -567,7 +569,8 @@ export function SplitTableModal({
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </BodyPortal>
   )
 }
 

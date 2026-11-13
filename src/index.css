@@ -2784,7 +2784,6 @@ textarea:focus-visible {
 .tables-container {
   width: min(1480px, 100%);
   margin: 0 auto;
-  animation: page-fade-in .45s ease-out both;
 }
 
 .tables-header {

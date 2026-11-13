@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { BodyPortal } from './BodyPortal'
 import {
   Settings,
   User,
@@ -215,13 +216,14 @@ export function TableLayout({
   }, [openMenuTableId])
 
   useEffect(() => {
-    if (!moveSourceId && !mergeMainId) return
+    if (!moveSourceId && !mergeMainId && !reopenSelectorOpen) return
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault()
         event.stopPropagation()
         if (moveSourceId) closeMoveModal()
         if (mergeMainId) closeMergeModal()
+        if (reopenSelectorOpen) setReopenSelectorOpen(false)
       } else if (event.key === 'Enter') {
         if (moveSourceId && selectedMoveTargetId) {
           event.preventDefault()
@@ -237,6 +239,7 @@ export function TableLayout({
   }, [
     moveSourceId,
     mergeMainId,
+    reopenSelectorOpen,
     selectedMoveTargetId,
     selectedMergeSourceId,
     closeMoveModal,
@@ -330,14 +333,16 @@ export function TableLayout({
       )}
 
       {toastMessage && (
-        <div
-          role="status"
-          aria-live="polite"
-          className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-[#3b291f] text-[#fffdf9] text-sm font-bold shadow-xl border border-[#8a6d57]/40 animate-in fade-in slide-in-from-bottom-2 duration-200"
-        >
-          <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
-          <span>{toastMessage}</span>
-        </div>
+        <BodyPortal>
+          <div
+            role="status"
+            aria-live="polite"
+            className="fixed bottom-6 right-6 z-50 flex items-center gap-2.5 px-4 py-3 rounded-2xl bg-[#3b291f] text-[#fffdf9] text-sm font-bold shadow-xl border border-[#8a6d57]/40 animate-in fade-in slide-in-from-bottom-2 duration-200"
+          >
+            <CheckCircle2 size={18} className="text-emerald-400 shrink-0" />
+            <span>{toastMessage}</span>
+          </div>
+        </BodyPortal>
       )}
 
       <div className="tables-grid grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -560,13 +565,14 @@ export function TableLayout({
 
       {/* Masayı Taşı Modal */}
       {moveSourceTable && (
-        <div
-          className="overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Masayı Taşı"
-          onClick={closeMoveModal}
-        >
+        <BodyPortal>
+          <div
+            className="overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Masayı Taşı"
+            onClick={closeMoveModal}
+          >
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <div>
@@ -646,18 +652,20 @@ export function TableLayout({
               </div>
             </div>
           </div>
-        </div>
+          </div>
+        </BodyPortal>
       )}
 
       {/* Masayı Birleştir Modal */}
       {mergeMainTable && (
-        <div
-          className="overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Masayı Birleştir"
-          onClick={closeMergeModal}
-        >
+        <BodyPortal>
+          <div
+            className="overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Masayı Birleştir"
+            onClick={closeMergeModal}
+          >
           <div className="modal" onClick={(e) => e.stopPropagation()}>
             <div className="modal-head">
               <div>
@@ -773,7 +781,8 @@ export function TableLayout({
               </div>
             </div>
           </div>
-        </div>
+          </div>
+        </BodyPortal>
       )}
 
       {/* Masayı Ayır Modal */}
@@ -788,13 +797,14 @@ export function TableLayout({
 
       {/* Kapatılan Adisyon Seçici Modal (Yalnızca Yönetici) */}
       {reopenSelectorOpen && (
-        <div
-          className="overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label="Kapatılan Adisyon Seçimi"
-          onClick={() => setReopenSelectorOpen(false)}
-        >
+        <BodyPortal>
+          <div
+            className="overlay"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Kapatılan Adisyon Seçimi"
+            onClick={() => setReopenSelectorOpen(false)}
+          >
           <div
             className="modal w-full bg-white dark:bg-stone-900 rounded-3xl p-5 sm:p-6 shadow-2xl border border-stone-200 dark:border-stone-800 space-y-4"
             style={{ width: 'min(760px, 95vw)', maxWidth: '760px' }}
@@ -1000,7 +1010,8 @@ export function TableLayout({
               </button>
             </div>
           </div>
-        </div>
+          </div>
+        </BodyPortal>
       )}
     </div>
   )

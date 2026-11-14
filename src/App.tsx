@@ -15,6 +15,8 @@ import {
   isTableOccupied,
   mergeTablesOrder,
   moveTableOrder,
+  normalizeOrderPaymentMethod,
+  normalizePaymentMethod,
   roundCurrency,
   splitTableOrder,
   type SplitItemSelection,
@@ -41,7 +43,11 @@ import { HomePage } from './components/HomePage'
 import { TableOrderView } from './components/TableOrderView'
 import { OpenDayModal, type OpenDayParams } from './components/OpenDayModal'
 import { CloseDayModal } from './components/CloseDayModal'
-import { saveStoredRefund } from './lib/businessDay'
+import {
+  executeOrderReopen,
+  healCorruptedReopenedData,
+  saveStoredRefund,
+} from './lib/businessDay'
 import {
   logActivity,
   migrateActivityLogsUsers,
@@ -163,6 +169,19 @@ function App() {
         const { updatedTables, changed } = backfillCartItemsTime(prev)
         return changed ? updatedTables : prev
       })
+      const currentTables = getTablesSafe()
+      const currentOrders = getCompletedOrdersSafe()
+      const healRes = healCorruptedReopenedData(currentTables, currentOrders)
+      if (healRes.healed) {
+        try {
+          const backup = createFullBackupFile('Geri açma veri modeli migrasyon ve onarım yedeği')
+          localStorage.setItem('storage_pre_reopen_heal_backup', JSON.stringify(backup))
+        } catch {}
+        saveTablesSafe(healRes.tables)
+        saveCompletedOrdersSafe(healRes.completedOrders)
+        setTables(healRes.tables)
+        setCompletedOrders(healRes.completedOrders)
+      }
       cleanupSpuriousDiscountLogs()
       verifyChainAndReport({ logIfBroken: true })
     } catch (e) {
@@ -501,6 +520,7 @@ function App() {
   const [confirmClear, setConfirmClear] = useState(false)
   const [lastAddedId, setLastAddedId] = useState<string | null>(null)
   const [paidMethod, setPaidMethod] = useState<PaymentMethod | null>(null)
+  const [completedModalSnapshot, setCompletedModalSnapshot] = useState<CompletedOrder | null>(null)
 
   // Refund state
   const [refundModalOpen, setRefundModalOpen] = useState(false)
@@ -587,6 +607,12 @@ function App() {
         logUnauthorizedAttempt(session || currentUser, 'day_close', 'İş günü kapatma engellendi')
         setDeniedActionName('İş Günü Kapatma')
         setPermissionDeniedModalOpen(true)
+        return
+      }
+      const openTablesNow = tables.filter((t) => isTableOccupied(t))
+      if (openTablesNow.length > 0) {
+        const tableNames = openTablesNow.map((t) => t.name).join(', ')
+        alert(`Açık masa varken iş günü kapatılamaz (${tableNames}). Önce tüm açık masaları kapatın.`)
         return
       }
       const cashierName = activeUserName
@@ -1584,23 +1610,140 @@ function App() {
     setReportSelectedDayId(null)
   }, [session, currentUser, settings])
 
-  const finishPayment = (method: PaymentMethod) => {
-    setPaidMethod(method)
-  }
+  const createAndPersistCompletedOrder = useCallback(
+    (finalMethod: PaymentMethod, allPaymentsList: PartialPayment[], overrideTotals?: typeof totals) => {
+      const orderDate = new Date().toISOString()
+      const normalizedFinalMethod = normalizeOrderPaymentMethod(finalMethod, 'cash')
+      const resolvedTotals = overrideTotals ?? totals
+      const effectivePayments: PartialPayment[] =
+        allPaymentsList.length > 0
+          ? allPaymentsList.map((p) => ({
+              ...p,
+              type: p.type || ('ODEME' as const),
+              status: p.status || ('GECERLI' as const),
+              method: normalizePaymentMethod(p.method, 'cash'),
+              amount: roundCurrency(p.amount),
+              tableId: p.tableId ?? activeTable?.id,
+              tableName: p.tableName ?? activeTable?.name,
+              businessDayId: p.businessDayId ?? openBusinessDay?.id,
+              cashier: p.cashier ?? activeUserName,
+              userId: p.userId ?? activeUserId,
+            }))
+          : [
+              {
+                id: generateUUID(),
+                type: 'ODEME' as const,
+                status: 'GECERLI' as const,
+                method: normalizePaymentMethod(normalizedFinalMethod, 'cash'),
+                amount: roundCurrency(resolvedTotals.total),
+                createdAt: orderDate,
+                tableId: activeTable?.id,
+                tableName: activeTable?.name,
+                businessDayId: openBusinessDay?.id,
+                cashier: activeUserName,
+                userId: activeUserId,
+              },
+            ]
+
+      const newOrder: CompletedOrder = {
+        id: generateUUID(),
+        orderNumber: orderNumber,
+        tableId: activeTable?.id,
+        tableName: activeTable?.name,
+        items: [...cart],
+        totals: { ...resolvedTotals },
+        discountRate: discountRate,
+        discountAmount: discountAmount,
+        taxRate: settings.taxRate,
+        paymentMethod: normalizedFinalMethod,
+        payments: effectivePayments.map((p) => ({ ...p, orderId: undefined })),
+        date: orderDate,
+        note: note,
+        customerName: customerName || undefined,
+        cashier: activeUserName,
+        businessDayId: openBusinessDay?.id,
+      }
+      newOrder.payments = newOrder.payments?.map((p) => ({ ...p, orderId: newOrder.id }))
+
+      setCompletedOrders((prev) => [newOrder, ...prev])
+      setCompletedModalSnapshot(newOrder)
+
+      logActivity({
+        businessDayId: openBusinessDay?.id,
+        type: 'payment',
+        orderId: newOrder.id,
+        tableName: activeTable?.name,
+        tableId: activeTable?.id,
+        amount: resolvedTotals.total,
+        userName: activeUserName,
+        userRole: activeUserRole,
+        userId: activeUserId,
+        details: `${orderNumber} nolu sipariş tamamlandı (${normalizedFinalMethod.toUpperCase()}). Toplam: ${formatCurrency(resolvedTotals.total)}`,
+      })
+
+      resetOrderState()
+      setPaidMethod(normalizedFinalMethod)
+    },
+    [
+      totals,
+      activeTable,
+      openBusinessDay,
+      activeUserName,
+      activeUserRole,
+      activeUserId,
+      orderNumber,
+      cart,
+      discountRate,
+      discountAmount,
+      settings.taxRate,
+      note,
+      customerName,
+      resetOrderState,
+    ],
+  )
+
+  const finishPayment = useCallback(
+    (method: PaymentMethod) => {
+      if (!completedModalSnapshot && cart.length > 0) {
+        const currentPayments = activeTable ? activeTable.payments || [] : directPayments
+        const cappedTotals = calculateTotals(cart, discountRate, discountAmount)
+        createAndPersistCompletedOrder(method, currentPayments, cappedTotals)
+      } else {
+        setPaidMethod(method)
+      }
+    },
+    [
+      completedModalSnapshot,
+      cart,
+      activeTable,
+      directPayments,
+      discountRate,
+      discountAmount,
+      createAndPersistCompletedOrder,
+    ],
+  )
 
   const handleAddPayment = useCallback(
     (payment: PartialPayment, isComplete: boolean, finalMethod: PaymentMethod) => {
+      const normalizedMethod = normalizePaymentMethod(payment.method, 'cash')
       const paymentWithDay: PartialPayment = {
         ...payment,
+        type: payment.type || 'ODEME',
+        status: payment.status || 'GECERLI',
+        method: normalizedMethod,
+        amount: roundCurrency(payment.amount),
+        tableId: activeTable?.id,
+        tableName: activeTable?.name,
         businessDayId: openBusinessDay?.id,
         cashier: activeUserName,
         userId: activeUserId,
       }
 
-      let paymentDetails = `${payment.method.toUpperCase()} ile ${formatCurrency(payment.amount)} ara ödeme alındı`
+      let paymentDetails = `${normalizedMethod.toUpperCase()} ile ${formatCurrency(paymentWithDay.amount)} ${isComplete ? 'ödeme alındı' : 'ara ödeme alındı'}`
       if (payment.isManualAmount && payment.selectedItemsTotal) {
-        const methodLabel = payment.method === 'card' ? 'Kart' : payment.method === 'cash' ? 'Nakit' : 'IBAN'
-        paymentDetails = `${methodLabel} · ${formatCurrency(payment.amount)} · manuel tutar · seçili ürün toplamı ${formatCurrency(payment.selectedItemsTotal)}`
+        const methodLabel =
+          normalizedMethod === 'card' ? 'Kart' : normalizedMethod === 'cash' ? 'Nakit' : 'IBAN'
+        paymentDetails = `${methodLabel} · ${formatCurrency(paymentWithDay.amount)} · manuel tutar · seçili ürün toplamı ${formatCurrency(payment.selectedItemsTotal)}`
       }
 
       logActivity({
@@ -1608,12 +1751,19 @@ function App() {
         type: 'payment',
         tableName: activeTable?.name,
         tableId: activeTable?.id,
-        amount: payment.amount,
+        amount: paymentWithDay.amount,
         userName: activeUserName,
         userRole: activeUserRole,
         userId: activeUserId,
         details: paymentDetails,
       })
+
+      if (isComplete) {
+        const existingPayments = activeTable ? activeTable.payments || [] : directPayments
+        const allPayments = [...existingPayments, paymentWithDay]
+        createAndPersistCompletedOrder(finalMethod, allPayments)
+        return
+      }
 
       if (activeTableId) {
         setTables((current) =>
@@ -1626,11 +1776,17 @@ function App() {
       } else {
         setDirectPayments((current) => [...current, paymentWithDay])
       }
-      if (isComplete) {
-        setPaidMethod(finalMethod)
-      }
     },
-    [activeTableId, activeTable, openBusinessDay, activeUserName, activeUserRole, activeUserId],
+    [
+      activeTableId,
+      activeTable,
+      directPayments,
+      openBusinessDay,
+      activeUserName,
+      activeUserRole,
+      activeUserId,
+      createAndPersistCompletedOrder,
+    ],
   )
 
   const handleUndoLastPayment = useCallback(() => {
@@ -1684,7 +1840,7 @@ function App() {
     (params: {
       qty: number
       reason: string
-      paymentMethod: PaymentMethod
+      paymentMethod?: PaymentMethod
       isTableRefund: boolean
     }) => {
       const userName = activeUserName
@@ -1702,6 +1858,9 @@ function App() {
           0,
         )
 
+        // Open-table full refund: the table and any partial payments on it are cleared without
+        // ever creating a CompletedOrder, so paymentReceived is false to prevent deducting from
+        // other closed tables' revenue.
         const refundRecord: Refund = {
           id: generateUUID(),
           businessDayId: openBusinessDay?.id,
@@ -1710,6 +1869,7 @@ function App() {
           amount: roundCurrency(totalAmount),
           reason: params.reason,
           paymentMethod: params.paymentMethod,
+          paymentReceived: false,
           refundedAt: nowIso,
           refundedBy: userName,
           items: activeItems.map((i) => ({
@@ -1771,6 +1931,9 @@ function App() {
         const unitPrice = getEffectivePrice(item)
         const refundAmount = roundCurrency(unitPrice * params.qty)
 
+        // Open-table item refund: the item is marked 'refunded' in the open table's cart,
+        // which immediately reduces the table's payable total before order completion.
+        // Setting paymentReceived: false prevents double-deducting from completed orders' revenue.
         const refundRecord: Refund = {
           id: generateUUID(),
           businessDayId: openBusinessDay?.id,
@@ -1779,6 +1942,7 @@ function App() {
           amount: refundAmount,
           reason: params.reason,
           paymentMethod: params.paymentMethod,
+          paymentReceived: false,
           refundedAt: nowIso,
           refundedBy: userName,
           items: [
@@ -1807,8 +1971,8 @@ function App() {
           details: `${item.name} (${params.qty} adet) iade edildi. Tutar: ${formatCurrency(refundAmount)}. Neden: ${params.reason}`,
         })
 
-        updateActiveCart((current) => {
-          return current.flatMap((cartItem) => {
+        const buildUpdatedCart = (current: CartItem[]): CartItem[] =>
+          current.flatMap((cartItem) => {
             if (cartItem.cartItemId !== item.cartItemId) {
               return [cartItem]
             }
@@ -1840,7 +2004,39 @@ function App() {
             }
             return [remainingItem, refundedPortion]
           })
-        })
+
+        const trimPaymentsToCap = (existingPayments: PartialPayment[], maxCap: number): PartialPayment[] => {
+          let running = 0
+          const result: PartialPayment[] = []
+          for (const p of existingPayments) {
+            if (running >= maxCap) break
+            const allowed = roundCurrency(Math.min(p.amount, maxCap - running))
+            if (allowed > 0) {
+              result.push(allowed === p.amount ? p : { ...p, amount: allowed })
+              running = roundCurrency(running + allowed)
+            }
+          }
+          return result
+        }
+
+        if (activeTableId) {
+          setTables((current) =>
+            current.map((t) => {
+              if (t.id !== activeTableId) return t
+              const updatedCart = buildUpdatedCart(t.cart)
+              const newTotals = calculateTotals(updatedCart, t.discountRate || 0, t.discountAmount || 0)
+              const cappedPayments = trimPaymentsToCap(t.payments || [], newTotals.total)
+              return {
+                ...t,
+                cart: updatedCart,
+                payments: cappedPayments,
+                status: isTableOccupied({ ...t, cart: updatedCart }) ? 'occupied' : 'empty',
+              }
+            }),
+          )
+        } else {
+          updateActiveCart(buildUpdatedCart)
+        }
       }
 
       setRefundModalOpen(false)
@@ -1881,72 +2077,40 @@ function App() {
     (params: {
       orderId: string
       reason: string
-      paymentAction: 'keep' | 'cancel'
       targetTableId: string
     }) => {
-      const targetOrder = completedOrders.find((o) => o.id === params.orderId)
-      if (!targetOrder) return
+      const result = executeOrderReopen({
+        orderId: params.orderId,
+        targetTableId: params.targetTableId,
+        reason: params.reason,
+        completedOrders,
+        tables,
+        openBusinessDay,
+        actor: session || currentUser,
+        settings,
+        userName: activeUserName,
+      })
 
-      if (!openBusinessDay || targetOrder.businessDayId !== openBusinessDay.id) {
-        alert('Yalnızca açık olan iş gününe ait adisyonlar geri açılabilir.')
+      if (!result.ok) {
+        if (result.code === 'UNAUTHORIZED') {
+          logUnauthorizedAttempt(session || currentUser, 'reopen_order', 'Adisyon geri açma engellendi')
+          setDeniedActionName('Adisyon Geri Açma')
+          setPermissionDeniedModalOpen(true)
+          return
+        }
+        alert(result.error)
         return
       }
 
-      const userName = activeUserName
-      const userRole = activeUserRole
-      const userId = activeUserId
-      const nowIso = new Date().toISOString()
-
-      // Mark order as reopened
-      setCompletedOrders((prev) =>
-        prev.map((o) =>
-          o.id === params.orderId
-            ? {
-                ...o,
-                reopened: true,
-                reopenedAt: nowIso,
-                reopenedBy: userName,
-                reopenReason: params.reason,
-              }
-            : o,
-        ),
-      )
-
-      // Restore to target table
-      setTables((prev) =>
-        prev.map((t) => {
-          if (t.id === params.targetTableId) {
-            const restoredCart = [...t.cart, ...targetOrder.items]
-            const restoredPayments =
-              params.paymentAction === 'keep'
-                ? [...(t.payments || []), ...(targetOrder.payments || [])]
-                : t.payments || []
-            return {
-              ...t,
-              cart: restoredCart,
-              payments: restoredPayments,
-              note: targetOrder.note || t.note,
-              customerName: targetOrder.customerName || t.customerName,
-              discountRate: targetOrder.discountRate ?? t.discountRate,
-              status: 'occupied' as const,
-            }
-          }
-          return t
-        }),
-      )
+      saveCompletedOrdersSafe(result.updatedOrders)
+      saveTablesSafe(result.updatedTables)
+      setCompletedOrders(result.updatedOrders)
+      setTables(result.updatedTables)
 
       logActivity({
-        businessDayId: openBusinessDay.id,
-        type: 'order_reopen',
-        orderId: targetOrder.id,
-        tableName: targetOrder.tableName || targetOrder.orderNumber,
-        tableId: params.targetTableId,
-        amount: targetOrder.totals.total,
-        reason: params.reason,
-        userName,
-        userRole,
-        userId,
-        details: `${targetOrder.orderNumber} nolu adisyon ${targetOrder.tableName || ''} masasına geri açıldı (${params.paymentAction === 'keep' ? 'Ödemeler Korundu' : 'Ödemeler İptal Edildi'}). Neden: ${params.reason}`,
+        ...result.activityLogPayload,
+        userRole: activeUserRole,
+        userId: activeUserId,
       })
 
       setIsSummaryOpen(false)
@@ -1954,7 +2118,18 @@ function App() {
       handleViewChange('tables')
       setActiveTableId(params.targetTableId)
     },
-    [completedOrders, openBusinessDay, activeUserName, activeUserRole, activeUserId, handleViewChange],
+    [
+      completedOrders,
+      tables,
+      openBusinessDay,
+      session,
+      currentUser,
+      settings,
+      activeUserName,
+      activeUserRole,
+      activeUserId,
+      handleViewChange,
+    ],
   )
 
   useEffect(() => {
@@ -2013,6 +2188,11 @@ function App() {
         }
       }
       if (event.key === 'Escape') {
+        if (paidMethod || completedModalSnapshot) {
+          setPaidMethod(null)
+          setCompletedModalSnapshot(null)
+          setActiveTableId(null)
+        }
         setIsPaymentOpen(false)
         setIsSummaryOpen(false)
         setIsHelpOpen(false)
@@ -2038,7 +2218,7 @@ function App() {
       document.removeEventListener('contextmenu', onContextMenu)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [cart.length, lastAddedId, menuProducts, activeTableId, openBusinessDay, session, currentUser, settings])
+  }, [cart.length, lastAddedId, menuProducts, activeTableId, openBusinessDay, session, currentUser, settings, paidMethod, completedModalSnapshot])
 
   if (showSplash) {
     return <SplashScreen onComplete={() => setShowSplash(false)} />
@@ -2358,132 +2538,43 @@ function App() {
         )}
 
         <PaymentModal
-          cart={cart}
-          discountRate={discountRate}
-          discountAmount={discountAmount}
+          cart={completedModalSnapshot ? completedModalSnapshot.items : cart}
+          discountRate={completedModalSnapshot ? completedModalSnapshot.discountRate || 0 : discountRate}
+          discountAmount={completedModalSnapshot ? completedModalSnapshot.discountAmount || 0 : discountAmount}
           onApplyDiscountAmount={setDiscountAmount}
           isOpen={isPaymentOpen}
-          note={note}
-          customerName={customerName}
+          note={completedModalSnapshot ? completedModalSnapshot.note || '' : note}
+          customerName={completedModalSnapshot ? completedModalSnapshot.customerName || '' : customerName}
           onClose={() => {
-            if (paidMethod) {
-              const orderDate = new Date().toISOString()
-              const effectivePayments: PartialPayment[] =
-                payments.length > 0
-                  ? [...payments]
-                  : [
-                      {
-                        id: generateUUID(),
-                        method: paidMethod === 'mixed' ? 'cash' : paidMethod,
-                        amount: totals.total,
-                        createdAt: orderDate,
-                        businessDayId: openBusinessDay?.id,
-                        cashier: activeUserName,
-                        userId: activeUserId,
-                      },
-                    ]
-
-              const newOrder: CompletedOrder = {
-                id: generateUUID(),
-                orderNumber: orderNumber,
-                tableId: activeTable?.id,
-                tableName: activeTable?.name,
-                items: [...cart],
-                totals: { ...totals },
-                discountRate: discountRate,
-                discountAmount: discountAmount,
-                taxRate: settings.taxRate,
-                paymentMethod: paidMethod,
-                payments: effectivePayments,
-                date: orderDate,
-                note: note,
-                customerName: customerName || undefined,
-                cashier: activeUserName,
-                businessDayId: openBusinessDay?.id,
-              }
-              setCompletedOrders(prev => [newOrder, ...prev])
-
-              logActivity({
-                businessDayId: openBusinessDay?.id,
-                type: 'payment',
-                tableName: activeTable?.name,
-                tableId: activeTable?.id,
-                amount: totals.total,
-                userName: activeUserName,
-                userRole: activeUserRole,
-                userId: activeUserId,
-                details: `${orderNumber} nolu sipariş tamamlandı (${paidMethod.toUpperCase()}). Toplam: ${formatCurrency(totals.total)}`,
-              })
-
-              resetOrderState()
+            if (paidMethod && !completedModalSnapshot && cart.length > 0) {
+              createAndPersistCompletedOrder(paidMethod, payments)
+            }
+            if (paidMethod || completedModalSnapshot) {
               setPaidMethod(null)
+              setCompletedModalSnapshot(null)
               setActiveTableId(null)
             }
             setIsPaymentOpen(false)
           }}
           onNewOrder={() => {
-            if (paidMethod) {
-              const orderDate = new Date().toISOString()
-              const effectivePayments: PartialPayment[] =
-                payments.length > 0
-                  ? [...payments]
-                  : [
-                      {
-                        id: generateUUID(),
-                        method: paidMethod === 'mixed' ? 'cash' : paidMethod,
-                        amount: totals.total,
-                        createdAt: orderDate,
-                        businessDayId: openBusinessDay?.id,
-                        cashier: activeUserName,
-                        userId: activeUserId,
-                      },
-                    ]
-
-              const newOrder: CompletedOrder = {
-                id: generateUUID(),
-                orderNumber: orderNumber,
-                tableId: activeTable?.id,
-                tableName: activeTable?.name,
-                items: [...cart],
-                totals: { ...totals },
-                discountRate: discountRate,
-                discountAmount: discountAmount,
-                taxRate: settings.taxRate,
-                paymentMethod: paidMethod,
-                payments: effectivePayments,
-                date: orderDate,
-                note: note,
-                customerName: customerName || undefined,
-                cashier: activeUserName,
-                businessDayId: openBusinessDay?.id,
-              }
-              setCompletedOrders(prev => [newOrder, ...prev])
-
-              logActivity({
-                businessDayId: openBusinessDay?.id,
-                type: 'payment',
-                tableName: activeTable?.name,
-                tableId: activeTable?.id,
-                amount: totals.total,
-                userName: activeUserName,
-                userRole: activeUserRole,
-                userId: activeUserId,
-                details: `${orderNumber} nolu sipariş tamamlandı (${paidMethod.toUpperCase()}). Toplam: ${formatCurrency(totals.total)}`,
-              })
+            if (paidMethod && !completedModalSnapshot && cart.length > 0) {
+              createAndPersistCompletedOrder(paidMethod, payments)
+            } else if (!completedModalSnapshot) {
+              resetOrderState()
             }
-            resetOrderState()
             setPaidMethod(null)
+            setCompletedModalSnapshot(null)
             setActiveTableId(null)
             setIsPaymentOpen(false)
           }}
           onPaid={finishPayment}
           onAddPayment={handleAddPayment}
           onUndoLastPayment={handleUndoLastPayment}
-          orderNumber={orderNumber}
+          orderNumber={completedModalSnapshot ? completedModalSnapshot.orderNumber : orderNumber}
           paidMethod={paidMethod}
-          payments={payments}
+          payments={completedModalSnapshot ? completedModalSnapshot.payments || [] : payments}
           settings={settings}
-          totals={totals}
+          totals={completedModalSnapshot ? completedModalSnapshot.totals : totals}
           currentSession={session}
         />
 

@@ -40,6 +40,7 @@ const MIGRATIONS = [
           note TEXT,
           customer_name TEXT,
           discount_rate REAL NOT NULL DEFAULT 0,
+          discount_amount_kurus INTEGER NOT NULL DEFAULT 0,
           sort_order INTEGER NOT NULL DEFAULT 0,
           updated_at TEXT NOT NULL
         );
@@ -101,6 +102,7 @@ const MIGRATIONS = [
           discount_kurus INTEGER NOT NULL DEFAULT 0,
           total_kurus INTEGER NOT NULL DEFAULT 0,
           discount_rate REAL NOT NULL DEFAULT 0,
+          discount_amount_kurus INTEGER NOT NULL DEFAULT 0,
           tax_rate REAL NOT NULL DEFAULT 10,
           payment_method TEXT,
           date TEXT NOT NULL,
@@ -113,6 +115,10 @@ const MIGRATIONS = [
           reopened_at TEXT,
           reopen_reason TEXT,
           reopened_by TEXT,
+          reopened_to_table_id TEXT,
+          reopened_to_table_name TEXT,
+          cancelled_payments_total_kurus INTEGER,
+          cancelled_payments_summary TEXT,
           sort_order INTEGER NOT NULL DEFAULT 0
         );
         CREATE INDEX IF NOT EXISTS idx_orders_state ON orders(state);
@@ -168,6 +174,12 @@ const MIGRATIONS = [
           is_manual_amount INTEGER,
           selected_items_total_kurus INTEGER,
           paid_items_json TEXT,
+          type TEXT NOT NULL DEFAULT 'ODEME',
+          status TEXT NOT NULL DEFAULT 'GECERLI',
+          cancelled_reason TEXT,
+          cancelled_by TEXT,
+          cancelled_at TEXT,
+          reversal_of_id TEXT,
           PRIMARY KEY (order_id, id, sort_order)
         );
         CREATE INDEX IF NOT EXISTS idx_payments_order_id ON payments(order_id);
@@ -186,6 +198,7 @@ const MIGRATIONS = [
           unit_price_kurus INTEGER,
           amount_kurus INTEGER NOT NULL,
           payment_method TEXT,
+          payment_received INTEGER,
           reason TEXT NOT NULL,
           created_at TEXT,
           created_by TEXT,
@@ -301,6 +314,61 @@ function ensureActivityLogChainSchema(db) {
       }
       if (!colNames.has('hash')) {
         db.exec('ALTER TABLE activity_logs ADD COLUMN hash TEXT')
+      }
+    }
+    const tableCols = db.pragma('table_info(tables)')
+    if (Array.isArray(tableCols) && tableCols.length > 0) {
+      const colNames = new Set(tableCols.map((c) => c.name))
+      if (!colNames.has('discount_amount_kurus')) {
+        db.exec('ALTER TABLE tables ADD COLUMN discount_amount_kurus INTEGER NOT NULL DEFAULT 0')
+      }
+    }
+    const orderCols = db.pragma('table_info(orders)')
+    if (Array.isArray(orderCols) && orderCols.length > 0) {
+      const colNames = new Set(orderCols.map((c) => c.name))
+      if (!colNames.has('discount_amount_kurus')) {
+        db.exec('ALTER TABLE orders ADD COLUMN discount_amount_kurus INTEGER NOT NULL DEFAULT 0')
+      }
+      if (!colNames.has('reopened_to_table_id')) {
+        db.exec('ALTER TABLE orders ADD COLUMN reopened_to_table_id TEXT')
+      }
+      if (!colNames.has('reopened_to_table_name')) {
+        db.exec('ALTER TABLE orders ADD COLUMN reopened_to_table_name TEXT')
+      }
+      if (!colNames.has('cancelled_payments_total_kurus')) {
+        db.exec('ALTER TABLE orders ADD COLUMN cancelled_payments_total_kurus INTEGER')
+      }
+      if (!colNames.has('cancelled_payments_summary')) {
+        db.exec('ALTER TABLE orders ADD COLUMN cancelled_payments_summary TEXT')
+      }
+    }
+    const paymentCols = db.pragma('table_info(payments)')
+    if (Array.isArray(paymentCols) && paymentCols.length > 0) {
+      const colNames = new Set(paymentCols.map((c) => c.name))
+      if (!colNames.has('type')) {
+        db.exec("ALTER TABLE payments ADD COLUMN type TEXT NOT NULL DEFAULT 'ODEME'")
+      }
+      if (!colNames.has('status')) {
+        db.exec("ALTER TABLE payments ADD COLUMN status TEXT NOT NULL DEFAULT 'GECERLI'")
+      }
+      if (!colNames.has('cancelled_reason')) {
+        db.exec('ALTER TABLE payments ADD COLUMN cancelled_reason TEXT')
+      }
+      if (!colNames.has('cancelled_by')) {
+        db.exec('ALTER TABLE payments ADD COLUMN cancelled_by TEXT')
+      }
+      if (!colNames.has('cancelled_at')) {
+        db.exec('ALTER TABLE payments ADD COLUMN cancelled_at TEXT')
+      }
+      if (!colNames.has('reversal_of_id')) {
+        db.exec('ALTER TABLE payments ADD COLUMN reversal_of_id TEXT')
+      }
+    }
+    const refundCols = db.pragma('table_info(refunds)')
+    if (Array.isArray(refundCols) && refundCols.length > 0) {
+      const colNames = new Set(refundCols.map((c) => c.name))
+      if (!colNames.has('payment_received')) {
+        db.exec('ALTER TABLE refunds ADD COLUMN payment_received INTEGER')
       }
     }
     db.exec(`

@@ -13,6 +13,7 @@ import {
   Copy,
   Sparkles,
   ShieldAlert,
+  RefreshCw,
 } from 'lucide-react'
 import { AppLogo } from './AppLogo'
 import {
@@ -20,8 +21,8 @@ import {
   loginWithPassword,
   loginWithPin,
   getAllUsers,
+  getAuthStorageState,
   initializeAuthSystem,
-  hasAnyAdmin,
   createInitialAdmin,
   clearInitialWaitstaffPins,
   type WaitstaffPinRecord,
@@ -58,8 +59,16 @@ export function LoginScreen({
     }
   }, [onRequestAdminExit])
 
-  // Initial setup state (if no admin exists at all)
-  const [isInitialSetup, setIsInitialSetup] = useState<boolean>(() => !hasAnyAdmin())
+  // Storage read error state (NEVER fall back to initial setup when user storage cannot be read)
+  const [authStorageError, setAuthStorageError] = useState<string | null>(
+    () => getAuthStorageState().storageError,
+  )
+
+  // Initial setup state (ONLY when storage read succeeded AND genuinely no admin exists)
+  const [isInitialSetup, setIsInitialSetup] = useState<boolean>(() => {
+    const state = getAuthStorageState()
+    return !state.storageError && !state.hasAdmin
+  })
   const [setupFullName, setSetupFullName] = useState('')
   const [setupUsername, setSetupUsername] = useState('')
   const [setupPassword, setSetupPassword] = useState('')
@@ -91,22 +100,45 @@ export function LoginScreen({
     getAllUsers().filter((u) => !u.isDeleted && u.status === 'active' && u.role === 'waiter'),
   )
 
-  // Initialize and migrate auth system on mount
-  useEffect(() => {
+  const syncAuthSystem = useCallback(() => {
+    const preCheck = getAuthStorageState()
+    if (preCheck.storageError) {
+      setAuthStorageError(preCheck.storageError)
+      setIsInitialSetup(false)
+      return
+    }
+
     initializeAuthSystem()
       .then((res) => {
-        const currentWaiters = getAllUsers().filter(
+        const currentState = getAuthStorageState()
+        const readError = res.storageError || currentState.storageError
+        if (readError) {
+          setAuthStorageError(readError)
+          setIsInitialSetup(false)
+          return
+        }
+
+        setAuthStorageError(null)
+        const currentWaiters = currentState.users.filter(
           (u) => !u.isDeleted && u.status === 'active' && u.role === 'waiter',
         )
         setWaitersList(currentWaiters)
-        const hasAdm = hasAnyAdmin()
-        setIsInitialSetup(!hasAdm)
+        setIsInitialSetup(!currentState.hasAdmin)
         if (res.initialPins && res.initialPins.length > 0) {
           setInitialPinsModal(res.initialPins)
         }
       })
-      .catch(console.error)
+      .catch((err) => {
+        console.error('Auth system initialization error:', err)
+        setAuthStorageError('Kullanıcı kayıtları okunamadı. Mevcut şifreler korunuyor, lütfen tekrar deneyin.')
+        setIsInitialSetup(false)
+      })
   }, [])
+
+  // Initialize and migrate auth system on mount
+  useEffect(() => {
+    syncAuthSystem()
+  }, [syncAuthSystem])
 
   // Check rate limit status for current context (admin or selected waiter)
   useEffect(() => {
@@ -326,8 +358,29 @@ export function LoginScreen({
           </div>
         </div>
 
-        {/* ─── İLK KURULUM EKRANI (Sistemde Yönetici Yoksa Açılır) ─── */}
-        {isInitialSetup ? (
+        {/* ─── DEPOLAMA / VERİTABANI OKUMA HATASI (Mevcut şifreyi asla sıfırlamaz) ─── */}
+        {authStorageError ? (
+          <div className="space-y-4">
+            <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-800 dark:text-rose-200 space-y-2 text-xs">
+              <div className="flex items-center gap-2 font-black text-sm">
+                <ShieldAlert size={18} className="shrink-0 text-rose-600 dark:text-rose-400" />
+                <span>Kullanıcı Veritabanı Okunamadı</span>
+              </div>
+              <p className="leading-relaxed">{authStorageError}</p>
+              <p className="text-[11px] opacity-90">
+                Güvenliğiniz için mevcut yönetici şifresi ve kullanıcı kayıtları silinmedi / sıfırlanmadı.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={syncAuthSystem}
+              className="solid-action w-full bg-amber-800 hover:bg-amber-900 text-white font-bold py-3 text-xs flex items-center justify-center gap-2"
+            >
+              <RefreshCw size={15} />
+              <span>Tekrar Dene</span>
+            </button>
+          </div>
+        ) : isInitialSetup ? (
           <div className="space-y-4">
             <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-xs text-amber-900 dark:text-amber-200 flex items-start gap-2.5">
               <Sparkles size={18} className="shrink-0 text-amber-700 dark:text-amber-400 mt-0.5" />

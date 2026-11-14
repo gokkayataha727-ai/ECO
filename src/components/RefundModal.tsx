@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { AlertCircle, RotateCcw, X, Banknote, CreditCard } from 'lucide-react'
+import { AlertCircle, RotateCcw, X, Banknote, CreditCard, Landmark } from 'lucide-react'
 import { formatCurrency, getEffectivePrice } from '../lib/format'
 import type { CartItem, PaymentMethod, Table } from '../types'
 
@@ -12,7 +12,7 @@ interface RefundModalProps {
   onConfirmRefund: (params: {
     qty: number
     reason: string
-    paymentMethod: PaymentMethod
+    paymentMethod?: PaymentMethod
     isTableRefund: boolean
   }) => void
 }
@@ -73,7 +73,7 @@ export function RefundModal({
     onConfirmRefund({
       qty: isTableRefund ? 1 : qty,
       reason: effectiveReason,
-      paymentMethod: refundPaymentMethod,
+      paymentMethod: hasPaymentReceived ? refundPaymentMethod : undefined,
       isTableRefund,
     })
     setIsConfirming(false)
@@ -196,11 +196,11 @@ export function RefundModal({
                 <label className="block text-xs font-bold text-stone-800 dark:text-stone-200 mb-1.5">
                   İade Ödeme Yöntemi (Müşteriye Ödenecek Biçim)
                 </label>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
                     onClick={() => setRefundPaymentMethod('cash')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                    className={`py-2 px-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
                       refundPaymentMethod === 'cash'
                         ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300'
                         : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300'
@@ -212,14 +212,26 @@ export function RefundModal({
                   <button
                     type="button"
                     onClick={() => setRefundPaymentMethod('card')}
-                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all ${
+                    className={`py-2 px-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
                       refundPaymentMethod === 'card'
                         ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-800 dark:text-indigo-300'
                         : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300'
                     }`}
                   >
                     <CreditCard size={15} />
-                    Kredi Kartı İade
+                    Kart İade
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRefundPaymentMethod('iban')}
+                    className={`py-2 px-2.5 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all ${
+                      refundPaymentMethod === 'iban'
+                        ? 'border-sky-600 bg-sky-50 dark:bg-sky-950/40 text-sky-800 dark:text-sky-300'
+                        : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300'
+                    }`}
+                  >
+                    <Landmark size={15} />
+                    IBAN İade
                   </button>
                 </div>
               </div>

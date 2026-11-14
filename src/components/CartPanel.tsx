@@ -66,7 +66,7 @@ export const CartPanel = memo(function CartPanel({
   canTakePayment = true,
 }: CartPanelProps) {
   const cartIsEmpty = cart.length === 0
-  const { paidTotal, remaining } = derivePaymentState(totals.total, payments)
+  const { paidTotal, remaining, overpayment } = derivePaymentState(totals.total, payments)
 
   // Group cart items by batch (tur)
   const groupedBatches = useMemo(() => {
@@ -288,28 +288,32 @@ export const CartPanel = memo(function CartPanel({
             <span>KDV dahil</span>
             <strong>%10</strong>
           </div>
-          {paidTotal > 0 && (
-            <>
-              <div className="total-row flex justify-between text-stone-600 dark:text-stone-400">
-                <span>Genel Toplam</span>
-                <strong>{formatCurrency(totals.total)}</strong>
-              </div>
-              <div className="total-row discount flex justify-between text-emerald-600 dark:text-emerald-400 font-bold">
-                <span>Ödenen</span>
-                <strong>-{formatCurrency(paidTotal)}</strong>
-              </div>
-              <div className="grand-total flex justify-between items-baseline pt-1 border-t border-[#e2d8ce] dark:border-stone-800 text-stone-900 dark:text-stone-100">
-                <span className="text-base font-black">Kalan Tutar</span>
-                <strong className="text-2xl font-black text-rose-600 dark:text-rose-400">{formatCurrency(remaining)}</strong>
-              </div>
-            </>
-          )}
-          {paidTotal === 0 && (
-            <div className="grand-total flex justify-between items-baseline pt-1 border-t border-[#e2d8ce] dark:border-stone-800 text-stone-900 dark:text-stone-100">
-              <span className="text-base font-black">Genel Toplam</span>
-              <strong className="text-2xl font-black text-[#8a6d57] dark:text-amber-300">{formatCurrency(totals.total)}</strong>
+          <div className="total-row flex justify-between text-stone-600 dark:text-stone-400">
+            <span>Genel Toplam</span>
+            <strong>{formatCurrency(totals.total)}</strong>
+          </div>
+          <div className="total-row flex justify-between text-emerald-600 dark:text-emerald-400 font-bold">
+            <span>Ödenen</span>
+            <strong>{formatCurrency(paidTotal)}</strong>
+          </div>
+          {overpayment > 0 && (
+            <div className="total-row flex justify-between text-rose-600 dark:text-rose-400 font-bold">
+              <span>Fazla Ödeme / İade Edilecek</span>
+              <strong>{formatCurrency(overpayment)}</strong>
             </div>
           )}
+          <div className="grand-total flex justify-between items-baseline pt-1 border-t border-[#e2d8ce] dark:border-stone-800 text-stone-900 dark:text-stone-100">
+            <span className="text-base font-black">Kalan Tutar</span>
+            <strong
+              className={`text-2xl font-black ${
+                paidTotal > 0
+                  ? 'text-rose-600 dark:text-rose-400'
+                  : 'text-[#8a6d57] dark:text-amber-300'
+              }`}
+            >
+              {formatCurrency(remaining)}
+            </strong>
+          </div>
         </div>
         <div className="cart-actions grid grid-cols-2 gap-2 mt-2">
           <button

@@ -21,6 +21,7 @@ import {
 } from '../../src/lib/storage'
 import {
   buildReportFromOrders,
+  executeOrderReopen,
 } from '../../src/lib/businessDay'
 import {
   calculateTotals,
@@ -233,14 +234,25 @@ describe('C. Critical User-Journey Integration Suite', () => {
     expect(report.orderCount).toBe(1)
   })
 
-  // Journey C.3: Complete order -> reopen order (both supported payment options: keep & cancel) -> complete again -> verify no double counting
-  it('C.3: Reopening order with keep or cancel payment modes never duplicates revenue', () => {
+  // Journey C.3: Complete order -> reopen order (previous payment cancelled, table opened unpaid) -> complete again -> verify no double counting
+  it('C.3: Reopening order cancels previous payment, opens table unpaid, and never duplicates revenue when re-paid', () => {
     const day = createMockBusinessDay({ status: 'open' })
     saveBusinessDaysSafe([day])
+
+    const emptyTable = createMockTable({
+      id: 'table-reopened-1',
+      name: 'Salon 1',
+      status: 'empty',
+      cart: [],
+      payments: [],
+    })
+    saveTablesSafe([emptyTable])
 
     // Step 1: Complete an initial order of 100 TL (paid cash)
     const initialOrder = createMockOrder({
       id: 'ord-reopen-test-1',
+      tableId: emptyTable.id,
+      tableName: emptyTable.name,
       businessDayId: day.id,
       totals: { subtotal: 100, discount: 0, total: 100 },
       payments: [createMockPayment({ method: 'cash', amount: 100, businessDayId: day.id })],
@@ -248,48 +260,61 @@ describe('C. Critical User-Journey Integration Suite', () => {
     saveCompletedOrdersSafe([initialOrder])
 
     // Report before reopen
-    let report = buildReportFromOrders(getCompletedOrdersSafe(), 10, undefined, day.id)
+    let report = buildReportFromOrders(getCompletedOrdersSafe(), 10, getTablesSafe(), day.id)
     expect(report.totalRevenue).toBe(100)
 
-    // Step 2: Reopen order (Option A: Keep payments)
-    const reopenedOrder: CompletedOrder = {
-      ...initialOrder,
-      reopened: true,
-      reopenedAt: new Date().toISOString(),
-      reopenReason: 'Müşteri hesaba ekleme yaptı',
-    }
-    // Put items and payments back on table
-    const table = createMockTable({
-      id: 'table-reopened-1',
-      status: 'occupied',
-      cart: [...initialOrder.items, createMockCartItem({ name: 'Ekstra Su', price: 20, quantity: 1 })],
-      payments: [...(initialOrder.payments || [])], // Payments kept (100 TL)
+    // Step 2: Reopen order via centralized atomic reopen service
+    const reopenRes = executeOrderReopen({
+      orderId: initialOrder.id,
+      targetTableId: emptyTable.id,
+      reason: 'Müşteri hesaba ekleme yaptı',
+      completedOrders: getCompletedOrdersSafe(),
+      tables: getTablesSafe(),
+      openBusinessDay: day,
     })
-    saveTablesSafe([table])
-    saveCompletedOrdersSafe([reopenedOrder])
+    expect(reopenRes.ok).toBe(true)
+    if (!reopenRes.ok) return
 
-    // Immediately after reopen: Reopened order is excluded from revenue, table has pending items
-    report = buildReportFromOrders(getCompletedOrdersSafe(), 10, undefined, day.id)
-    expect(report.totalRevenue).toBe(0) // No completed revenue yet
+    // Previous payment is marked IPTAL (not deleted) and table has 0 TL paid
+    expect(reopenRes.reopenedOrder.payments?.[0].status).toBe('IPTAL')
+    expect(reopenRes.reopenedTable.payments).toEqual([])
 
-    // Customer pays the extra 20 TL in cash
-    const extraPayment = createMockPayment({ method: 'cash', amount: 20, businessDayId: day.id })
-    const finalPayments = [...table.payments!, extraPayment]
-    const finalTotals = calculateTotals(table.cart, 0) // 120 TL
+    const tableWithExtraItem = {
+      ...reopenRes.reopenedTable,
+      cart: [
+        ...reopenRes.reopenedTable.cart,
+        createMockCartItem({ name: 'Ekstra Su', price: 20, quantity: 1 }),
+      ],
+    }
+    saveTablesSafe([tableWithExtraItem])
+    saveCompletedOrdersSafe(reopenRes.updatedOrders)
+
+    // Immediately after reopen: Reopened order is excluded from revenue, table has 0 paid
+    report = buildReportFromOrders(getCompletedOrdersSafe(), 10, getTablesSafe(), day.id)
+    expect(report.totalRevenue).toBe(0)
+    expect(report.paidTablesTotal).toBe(0)
+    expect(report.openTablePaymentsTotal).toBe(0)
+
+    // Customer pays the full 120 TL in cash
+    const finalPayment = createMockPayment({ method: 'cash', amount: 120, businessDayId: day.id })
+    const finalTotals = calculateTotals(tableWithExtraItem.cart, 0) // 120 TL
 
     const finalOrder = createMockOrder({
       id: 'ord-final-recompleted',
+      tableId: emptyTable.id,
+      tableName: emptyTable.name,
       businessDayId: day.id,
-      items: table.cart,
+      items: tableWithExtraItem.cart,
       totals: finalTotals,
-      payments: finalPayments,
+      payments: [finalPayment],
       cancelled: false,
       reopened: false,
     })
-    saveCompletedOrdersSafe([finalOrder, reopenedOrder])
+    saveCompletedOrdersSafe([finalOrder, ...reopenRes.updatedOrders])
+    saveTablesSafe([{ ... emptyTable, status: 'empty', cart: [], payments: [] }])
 
     // Final report verification: Total must be EXACTLY 120 TL, not 220 TL (no double counting!)
-    const finalReport = buildReportFromOrders(getCompletedOrdersSafe(), 10, undefined, day.id)
+    const finalReport = buildReportFromOrders(getCompletedOrdersSafe(), 10, getTablesSafe(), day.id)
     expect(finalReport.totalRevenue).toBe(120)
     expect(finalReport.orderCount).toBe(1)
     expect(finalReport.paymentDistribution.cash).toBe(120)

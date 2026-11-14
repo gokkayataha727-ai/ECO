@@ -34,9 +34,16 @@ interface ReceiptsTableProps {
   isLoading: boolean
   onPageChange: (page: number) => void
   onReopenOrder?: (orderId: string) => void
+  openBusinessDayId?: string
 }
 
-export function ReceiptsTable({ data, isLoading, onPageChange, onReopenOrder }: ReceiptsTableProps) {
+export function ReceiptsTable({
+  data,
+  isLoading,
+  onPageChange,
+  onReopenOrder,
+  openBusinessDayId,
+}: ReceiptsTableProps) {
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set())
 
   const toggleRow = (id: string) => {
@@ -117,17 +124,34 @@ export function ReceiptsTable({ data, isLoading, onPageChange, onReopenOrder }: 
                     {formatCurrency(order.total_amount)}
                   </td>
                   <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                    {onReopenOrder && (
-                      <button
-                        type="button"
-                        onClick={() => onReopenOrder(order.id)}
-                        className="px-2.5 py-1 text-xs font-bold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg inline-flex items-center gap-1 transition-colors"
-                        title="Kapatılmış adisyonu masaya geri aç"
-                      >
-                        <RotateCcw size={12} />
-                        <span>Geri Aç</span>
-                      </button>
-                    )}
+                    {onReopenOrder && (() => {
+                      const isClosedDayOrder =
+                        openBusinessDayId !== undefined &&
+                        (!openBusinessDayId || order.businessDayId !== openBusinessDayId)
+                      return (
+                        <button
+                          type="button"
+                          disabled={isClosedDayOrder}
+                          onClick={() => {
+                            if (isClosedDayOrder) return
+                            onReopenOrder(order.id)
+                          }}
+                          className={`px-2.5 py-1 text-xs font-bold border rounded-lg inline-flex items-center gap-1 transition-colors ${
+                            isClosedDayOrder
+                              ? 'text-gray-400 bg-gray-100 border-gray-200 cursor-not-allowed opacity-60'
+                              : 'text-purple-700 bg-purple-50 hover:bg-purple-100 border-purple-200'
+                          }`}
+                          title={
+                            isClosedDayOrder
+                              ? 'Bu adisyon kapanmış bir güne ait, geri açılamaz'
+                              : 'Kapatılmış adisyonu masaya geri aç'
+                          }
+                        >
+                          <RotateCcw size={12} />
+                          <span>Geri Aç</span>
+                        </button>
+                      )
+                    })()}
                   </td>
                 </tr>
                 {expandedRows.has(order.id) && (

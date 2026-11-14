@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { CompletedOrder, Table } from '../types'
-import { formatCurrency } from '../lib/format'
+import { formatCurrency, isTableOccupied, roundCurrency } from '../lib/format'
+import { getIstanbulParts, getOrderAppliedPayments } from '../lib/businessDay'
 
 export interface HomeStats {
   todayRevenue: number
@@ -12,12 +13,15 @@ export interface HomeStats {
   totalTableCount: number
 }
 
-function isSameDay(dateStr: string, today: Date): boolean {
+function isSameIstanbulDay(dateStr: string, today: Date): boolean {
   const d = new Date(dateStr)
+  if (Number.isNaN(d.getTime())) return false
+  const dParts = getIstanbulParts(d)
+  const tParts = getIstanbulParts(today)
   return (
-    d.getFullYear() === today.getFullYear() &&
-    d.getMonth() === today.getMonth() &&
-    d.getDate() === today.getDate()
+    dParts.year === tParts.year &&
+    dParts.month === tParts.month &&
+    dParts.day === tParts.day
   )
 }
 
@@ -29,16 +33,16 @@ export function useHomeStats(
   return useMemo(() => {
     const today = new Date()
 
-    const validOrders = completedOrders.filter((o) => !o.cancelled)
+    const validOrders = completedOrders.filter((o) => !o.cancelled && !o.reopened)
     const todayOrders = openBusinessDayId
       ? validOrders.filter((o) => o.businessDayId === openBusinessDayId)
-      : validOrders.filter((o) => isSameDay(o.date, today))
-    const todayRevenue = todayOrders.reduce((sum, o) => sum + o.totals.total, 0)
+      : validOrders.filter((o) => isSameIstanbulDay(o.date, today))
+    const todayRevenue = roundCurrency(
+      todayOrders.reduce((sum, o) => sum + getOrderAppliedPayments(o).total, 0),
+    )
     const todayOrderCount = todayOrders.length
-    const averageBasket = todayOrderCount > 0 ? todayRevenue / todayOrderCount : 0
-    const occupiedTableCount = tables.filter(
-      (t) => t.cart.length > 0 || t.status === 'occupied'
-    ).length
+    const averageBasket = todayOrderCount > 0 ? roundCurrency(todayRevenue / todayOrderCount) : 0
+    const occupiedTableCount = tables.filter((t) => isTableOccupied(t)).length
 
     return {
       todayRevenue,

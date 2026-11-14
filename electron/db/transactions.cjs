@@ -7,6 +7,8 @@ const {
   prependActivityLog,
   saveTables,
 } = require('./repository.cjs')
+const { toKurusNullable } = require('./currency.cjs')
+const { ensureActivityLogChainSchema } = require('./schema.cjs')
 
 function maybeFailStep(stepName, options) {
   if (!options) return
@@ -158,14 +160,19 @@ function refundTransaction(db, params, options = {}) {
 }
 
 /**
- * 4) Adisyon Geri Açma (Mark Order Reopened + Restore Items/Payments to Table + Activity Log)
+ * 4) Adisyon Geri Açma (Mark Order Reopened + Cancel Order Payments + Restore Items to Unpaid Table + Activity Log)
  */
 function reopenOrderTransaction(db, params, options = {}) {
+  ensureActivityLogChainSchema(db)
   const {
     orderId,
     reopenedAt,
     reopenedBy,
     reopenReason,
+    reopenedToTableId,
+    reopenedToTableName,
+    cancelledPaymentsTotal,
+    cancelledPaymentsSummary,
     updatedTables,
     activityLog,
   } = params || {}
@@ -174,8 +181,39 @@ function reopenOrderTransaction(db, params, options = {}) {
     throw new Error('reopenOrderTransaction: orderId zorunludur.')
   }
 
+  const trimmedReason = String(reopenReason || '').trim()
+  if (trimmedReason.length < 3) {
+    throw new Error('Geri açma sebebi en az 3 karakter olmalıdır.')
+  }
+
+  const nowIso = reopenedAt || new Date().toISOString()
+  const actorName = reopenedBy || 'Yönetici'
+
   const tx = db.transaction(() => {
     maybeFailStep('before_mark_reopened', options)
+
+    const existingOrder = db
+      .prepare('SELECT id, business_day_id, reopened, cancelled FROM orders WHERE id = ?')
+      .get(orderId)
+    if (!existingOrder) {
+      throw new Error(`Geri açılacak sipariş bulunamadı: ${orderId}`)
+    }
+    if (existingOrder.reopened) {
+      throw new Error('Bu adisyon zaten geri açılmış.')
+    }
+    if (existingOrder.cancelled) {
+      throw new Error('İptal edilmiş bir adisyon geri açılamaz.')
+    }
+
+    // İş günü kontrolü: eğer veritabanında business_days kayıtları varsa, siparişin iş günü açık olmalı
+    if (existingOrder.business_day_id) {
+      const dayRow = db
+        .prepare('SELECT id, status FROM business_days WHERE id = ?')
+        .get(existingOrder.business_day_id)
+      if (dayRow && dayRow.status !== 'open') {
+        throw new Error('Bu adisyon kapanmış bir güne ait, geri açılamaz.')
+      }
+    }
 
     const info = db.prepare(`
       UPDATE orders
@@ -183,18 +221,36 @@ function reopenOrderTransaction(db, params, options = {}) {
           reopened = 1,
           reopened_at = ?,
           reopened_by = ?,
-          reopen_reason = ?
+          reopen_reason = ?,
+          reopened_to_table_id = ?,
+          reopened_to_table_name = ?,
+          cancelled_payments_total_kurus = ?,
+          cancelled_payments_summary = ?
       WHERE id = ?
     `).run(
-      reopenedAt || new Date().toISOString(),
-      reopenedBy || 'Yönetici',
-      reopenReason || 'Geri açıldı',
+      nowIso,
+      actorName,
+      trimmedReason,
+      reopenedToTableId ?? null,
+      reopenedToTableName ?? null,
+      toKurusNullable(cancelledPaymentsTotal),
+      cancelledPaymentsSummary ?? null,
       orderId,
     )
 
     if (info.changes === 0) {
       throw new Error(`Geri açılacak sipariş bulunamadı: ${orderId}`)
     }
+
+    // Ödeme kayıtlarını silmeden IPTAL durumuna çek (Değişmez 4)
+    db.prepare(`
+      UPDATE payments
+      SET status = 'IPTAL',
+          cancelled_at = ?,
+          cancelled_by = ?,
+          cancelled_reason = ?
+      WHERE order_id = ?
+    `).run(nowIso, actorName, trimmedReason, orderId)
 
     maybeFailStep('after_mark_reopened', options)
 
@@ -267,6 +323,16 @@ function closeBusinessDayTransaction(db, params, options = {}) {
       .get(closedDay.id)
     if (!existing || existing.status !== 'open') {
       throw new Error('Kapatılacak açık iş günü bulunamadı veya zaten kapatılmış.')
+    }
+
+    if (options && options.enforceNoOpenTables) {
+      const occupiedTableRows = db
+        .prepare("SELECT id, name FROM tables WHERE status = 'occupied'")
+        .all()
+      if (Array.isArray(occupiedTableRows) && occupiedTableRows.length > 0) {
+        const names = occupiedTableRows.map((r) => r.name || r.id).join(', ')
+        throw new Error(`Açık masa varken gün kapatılamaz: ${names}`)
+      }
     }
 
     upsertSingleBusinessDay(

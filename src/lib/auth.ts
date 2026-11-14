@@ -9,7 +9,14 @@ import {
   isSimplePin,
 } from './crypto'
 import { logActivity } from './activityLog'
-import { getUsersSafe, saveUsersSafe, safeGetItem, safeSetItem, safeRemoveItem } from './storage/repository'
+import {
+  getUsersSafe,
+  getUsersWithStatus,
+  saveUsersSafe,
+  safeGetItem,
+  safeSetItem,
+  safeRemoveItem,
+} from './storage/repository'
 
 const SESSION_STORAGE_KEY = 'appSession'
 const FAILED_ATTEMPTS_KEY = 'appLoginFailedAttempts'
@@ -42,8 +49,31 @@ export function getAllUsers(): User[] {
 /**
  * Save users to storage (SQLite when active, localStorage fallback).
  */
-export function saveUsers(users: User[]): void {
-  saveUsersSafe(users)
+export function saveUsers(users: User[]): boolean {
+  return saveUsersSafe(users)
+}
+
+export interface AuthStorageState {
+  hasAdmin: boolean
+  users: User[]
+  storageError: string | null
+}
+
+/**
+ * Inspects persisted users and distinguishes an empty initial state from a storage/DB read error.
+ */
+export function getAuthStorageState(): AuthStorageState {
+  const read = getUsersWithStatus()
+  const hasAdmin = read.users.some(
+    (u) => !u.isDeleted && u.status === 'active' && u.role === 'admin',
+  )
+  return {
+    hasAdmin,
+    users: read.users,
+    storageError: read.storageError
+      ? read.error || 'Kullanıcı verileri okunamadı. Mevcut kayıtlar korunuyor.'
+      : null,
+  }
 }
 
 /**
@@ -82,8 +112,19 @@ export function hasAnyAdmin(): boolean {
 export async function initializeAuthSystem(): Promise<{
   activeAdmin: User | null
   initialPins: WaitstaffPinRecord[] | null
+  storageError?: string | null
 }> {
-  let users = getAllUsers()
+  const read = getUsersWithStatus()
+  if (read.storageError) {
+    // NEVER seed defaults or overwrite storage when existing user records could not be read!
+    return {
+      activeAdmin: null,
+      initialPins: null,
+      storageError: read.error || 'Kullanıcı verileri okunamadı.',
+    }
+  }
+
+  let users = [...read.users]
   let hasChanges = false
   const generatedPins: WaitstaffPinRecord[] = []
 
@@ -153,12 +194,20 @@ export async function initializeAuthSystem(): Promise<{
   }
 
   if (hasChanges) {
-    saveUsers(users)
+    const saved = saveUsers(users)
+    if (!saved) {
+      return {
+        activeAdmin: activeAdmin || null,
+        initialPins: null,
+        storageError: 'Kullanıcı kayıtları kalıcı depolamaya yazılamadı.',
+      }
+    }
   }
 
   return {
     activeAdmin: activeAdmin || null,
     initialPins: generatedPins.length > 0 ? generatedPins : getInitialWaitstaffPins(),
+    storageError: null,
   }
 }
 
@@ -200,6 +249,26 @@ export async function createInitialAdmin(data: {
     return { success: false, error: passCheck.error }
   }
 
+  const existingRead = getUsersWithStatus()
+  if (existingRead.storageError) {
+    return {
+      success: false,
+      error:
+        existingRead.error ||
+        'Mevcut kullanıcı verileri okunamadı; güvenlik nedeniyle yeni kurulum engellendi.',
+    }
+  }
+  if (
+    existingRead.users.some(
+      (u) => !u.isDeleted && u.status === 'active' && u.role === 'admin',
+    )
+  ) {
+    return {
+      success: false,
+      error: 'Sistemde zaten kayıtlı bir yönetici hesabı bulunuyor.',
+    }
+  }
+
   const passwordHash = await hashSecret(data.password.trim())
   const adminUser: User = {
     id: generateUUID(),
@@ -214,12 +283,22 @@ export async function createInitialAdmin(data: {
     createdBy: 'İlk Kurulum',
   }
 
-  let users = getAllUsers()
-  users = [adminUser, ...users]
-  saveUsers(users)
+  const users = [adminUser, ...existingRead.users]
+  if (!saveUsers(users)) {
+    return {
+      success: false,
+      error: 'Yönetici hesabı kalıcı veritabanına kaydedilemedi.',
+    }
+  }
 
   // Provision Garson 1 - 4
   const authInit = await initializeAuthSystem()
+  if (authInit.storageError) {
+    return {
+      success: false,
+      error: authInit.storageError,
+    }
+  }
 
   logActivity({
     type: 'user_create',
@@ -409,7 +488,14 @@ export async function loginWithPassword(
     }
   }
 
-  const users = getAllUsers()
+  const usersRead = getUsersWithStatus()
+  if (usersRead.storageError) {
+    return {
+      success: false,
+      error: usersRead.error || 'Kullanıcı veritabanına ulaşılamadı.',
+    }
+  }
+  const users = usersRead.users
   const user = users.find(
     (u) => !u.isDeleted && u.username.toLowerCase() === username,
   )
@@ -551,7 +637,14 @@ export async function loginWithPin(
     return { success: false, error: 'Lütfen PIN kodunuzu girin.' }
   }
 
-  const activeWaiters = getAllUsers().filter(
+  const waitersRead = getUsersWithStatus()
+  if (waitersRead.storageError) {
+    return {
+      success: false,
+      error: waitersRead.error || 'Kullanıcı veritabanına ulaşılamadı.',
+    }
+  }
+  const activeWaiters = waitersRead.users.filter(
     (u) => !u.isDeleted && u.status === 'active' && u.role === 'waiter' && u.pinHash,
   )
 
@@ -775,7 +868,9 @@ export async function createUser(
     createdBy: actingSession?.fullName || 'Yönetici',
   }
 
-  saveUsers([newUser, ...existingUsers])
+  if (!saveUsers([newUser, ...existingUsers])) {
+    return { success: false, error: 'Yeni kullanıcı kalıcı depolamaya kaydedilemedi.' }
+  }
 
   logActivity({
     type: 'user_create',
@@ -846,7 +941,9 @@ export async function updateUser(
     role: data.role,
   }
 
-  saveUsers(users.map((u) => (u.id === userId ? updatedUser : u)))
+  if (!saveUsers(users.map((u) => (u.id === userId ? updatedUser : u)))) {
+    return { success: false, error: 'Kullanıcı değişikliği kalıcı depolamaya kaydedilemedi.' }
+  }
 
   logActivity({
     type: 'user_update',
@@ -917,7 +1014,9 @@ export async function resetUserPassword(
     mustChangePassword,
   }
 
-  saveUsers(users.map((u) => (u.id === userId ? updatedUser : u)))
+  if (!saveUsers(users.map((u) => (u.id === userId ? updatedUser : u)))) {
+    return { success: false, error: 'Kullanıcı değişikliği kalıcı depolamaya kaydedilemedi.' }
+  }
 
   logActivity({
     type: 'password_reset',
@@ -967,7 +1066,9 @@ export function toggleUserStatus(
     status: newStatus,
   }
 
-  saveUsers(users.map((u) => (u.id === userId ? updatedUser : u)))
+  if (!saveUsers(users.map((u) => (u.id === userId ? updatedUser : u)))) {
+    return { success: false, error: 'Kullanıcı değişikliği kalıcı depolamaya kaydedilemedi.' }
+  }
 
   // If user was deactivated and is currently logged in, revoke their session immediately!
   const currentSession = getActiveSession()
@@ -1024,7 +1125,9 @@ export function softDeleteUser(
     status: 'inactive',
   }
 
-  saveUsers(users.map((u) => (u.id === userId ? updatedUser : u)))
+  if (!saveUsers(users.map((u) => (u.id === userId ? updatedUser : u)))) {
+    return { success: false, error: 'Kullanıcı değişikliği kalıcı depolamaya kaydedilemedi.' }
+  }
 
   // Terminate any active session for this user
   const currentSession = getActiveSession()
@@ -1068,7 +1171,9 @@ export async function forceChangePassword(
     mustChangePassword: false,
   }
 
-  saveUsers(users.map((u) => (u.id === userId ? updatedUser : u)))
+  if (!saveUsers(users.map((u) => (u.id === userId ? updatedUser : u)))) {
+    return { success: false, error: 'Kullanıcı değişikliği kalıcı depolamaya kaydedilemedi.' }
+  }
 
   logActivity({
     type: 'password_reset',

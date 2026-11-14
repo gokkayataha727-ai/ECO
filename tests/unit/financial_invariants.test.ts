@@ -8,11 +8,15 @@ import {
   getIstanbulParts,
   getOrderAppliedPayments,
   getReportForBusinessDay,
+  isPaidRefund,
 } from '../../src/lib/businessDay'
 import {
   calculateTotals,
   getLineAfterItemDiscount,
+  normalizePaymentMethod,
   roundCurrency,
+  toKurus,
+  fromKurus,
 } from '../../src/lib/format'
 import { generateUUID } from '../../src/lib/uuid'
 import {
@@ -688,3 +692,400 @@ describe('B. Financial and Business-Day Correctness Suite', () => {
     expect(decimalReport.totalTax).toBe(10)
   })
 })
+
+describe('C. Raporlar & Ödeme Doğrulama Senaryoları (10 Zorunlu Senaryo)', () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  // Senaryo 1 — Tek masa, tek ödeme (Nakit)
+  it('Senaryo 1: 1000 TL nakit tek masa ödemesi rapora eksiksiz yansır', () => {
+    const day = createMockBusinessDay({ id: 'day-s1', status: 'open', openingCash: 500 })
+    const item = createMockCartItem({ name: 'Flat White', category: 'Sıcak Kahveler', price: 250, quantity: 4 }) // 1000 TL
+    const order = createMockOrder({
+      businessDayId: day.id,
+      items: [item],
+      totals: { subtotal: 1000, discount: 0, total: 1000 },
+      paymentMethod: 'cash',
+      payments: [createMockPayment({ method: 'cash', amount: 1000, businessDayId: day.id })],
+      taxRate: 10,
+    })
+
+    const report = buildReportFromOrders([order], 10, [], day.id, [])
+    expect(report.grossItemsRevenue).toBe(1000)
+    expect(report.paidTablesTotal).toBe(1000)
+    expect(report.totalRevenue).toBe(1000)
+    expect(report.paymentDistribution).toEqual({ cash: 1000, card: 0, iban: 0 })
+    expect(report.totalTax).toBe(0)
+    expect(report.orderCount).toBe(1)
+    expect(report.averageBasket).toBe(1000)
+  })
+
+  // Senaryo 2 — Tek masa, tek ödeme (Kredi Kartı)
+  it('Senaryo 2: 1000 TL kredi kartı tek masa ödemesi, %10 KDV (100 TL) ve POS Z özeti doğru hesaplanır', () => {
+    const day = createMockBusinessDay({ id: 'day-s2', status: 'open', openingCash: 500 })
+    const item = createMockCartItem({ name: 'Latte', category: 'Sıcak Kahveler', price: 200, quantity: 5 }) // 1000 TL
+    const order = createMockOrder({
+      businessDayId: day.id,
+      items: [item],
+      totals: { subtotal: 1000, discount: 0, total: 1000 },
+      paymentMethod: 'card',
+      payments: [createMockPayment({ method: 'card', amount: 1000, businessDayId: day.id })],
+      taxRate: 10,
+    })
+
+    const report = buildReportFromOrders([order], 10, [], day.id, [])
+    const cardBreakdown = calculateDayCardBreakdown(day, [order], [], [])
+
+    expect(report.grossItemsRevenue).toBe(1000)
+    expect(report.paidTablesTotal).toBe(1000)
+    expect(report.paymentDistribution).toEqual({ cash: 0, card: 1000, iban: 0 })
+    expect(report.totalTax).toBe(100)
+    expect(cardBreakdown.expectedZ).toBe(1000)
+  })
+
+  // Senaryo 3 — Tek masa, tek ödeme (IBAN)
+  it('Senaryo 3: 1000 TL IBAN ödemesi doğru dağılım ve 0 KDV ile raporlanır', () => {
+    const day = createMockBusinessDay({ id: 'day-s3', status: 'open', openingCash: 500 })
+    const item = createMockCartItem({ name: 'Cold Brew', category: 'Soğuk Kahveler', price: 250, quantity: 4 }) // 1000 TL
+    const order = createMockOrder({
+      businessDayId: day.id,
+      items: [item],
+      totals: { subtotal: 1000, discount: 0, total: 1000 },
+      paymentMethod: 'iban',
+      payments: [createMockPayment({ method: 'iban', amount: 1000, businessDayId: day.id })],
+      taxRate: 10,
+    })
+
+    const report = buildReportFromOrders([order], 10, [], day.id, [])
+    expect(report.grossItemsRevenue).toBe(1000)
+    expect(report.paidTablesTotal).toBe(1000)
+    expect(report.paymentDistribution).toEqual({ cash: 0, card: 0, iban: 1000 })
+    expect(report.totalTax).toBe(0)
+  })
+
+  // Senaryo 4 — Parçalı ödeme (Nakit + Kart)
+  it('Senaryo 4: 1000 TL masa 600 TL nakit + 400 TL kart parçalı ödendiğinde dağılım ve KDV (40 TL) doğrudur', () => {
+    const day = createMockBusinessDay({ id: 'day-s4', status: 'open', openingCash: 500 })
+    const item = createMockCartItem({ name: 'Cortado', category: 'Sıcak Kahveler', price: 200, quantity: 5 }) // 1000 TL
+    const order = createMockOrder({
+      businessDayId: day.id,
+      items: [item],
+      totals: { subtotal: 1000, discount: 0, total: 1000 },
+      paymentMethod: 'mixed',
+      payments: [
+        createMockPayment({ method: 'cash', amount: 600, businessDayId: day.id }),
+        createMockPayment({ method: 'card', amount: 400, businessDayId: day.id }),
+      ],
+      taxRate: 10,
+    })
+
+    const report = buildReportFromOrders([order], 10, [], day.id, [])
+    expect(report.grossItemsRevenue).toBe(1000)
+    expect(report.paidTablesTotal).toBe(1000)
+    expect(report.paymentDistribution).toEqual({ cash: 600, card: 400, iban: 0 })
+    expect(report.totalTax).toBe(40) // 400 * 10%
+    expect(report.orderCount).toBe(1)
+
+    const cashPct = Math.round((report.paymentDistribution.cash / report.paidTablesTotal!) * 100)
+    const cardPct = Math.round((report.paymentDistribution.card / report.paidTablesTotal!) * 100)
+    expect(cashPct).toBe(60)
+    expect(cardPct).toBe(40)
+  })
+
+  // Senaryo 5 — Kısmi ödeme (masa hâlâ açık) ve kapanışta çift sayılmama
+  it('Senaryo 5: 1000 TL açık masada 400 TL nakit kısmi ödeme varken açık masa bakiyesi 600 TL görünür, kapandığında çift sayılmaz', () => {
+    const day = createMockBusinessDay({ id: 'day-s5', status: 'open', openingCash: 500 })
+    const nowIso = createIstanbulDate(2026, 11, 13, 15, 0, 0).toISOString()
+    const item = createMockCartItem({
+      name: 'V60',
+      category: 'Demleme',
+      price: 250,
+      quantity: 4,
+      addedAt: nowIso,
+    }) // 1000 TL
+
+    const openTable = createMockTable({
+      id: 'table-s5',
+      name: 'Bahçe 1',
+      status: 'occupied',
+      cart: [item],
+      payments: [
+        createMockPayment({
+          id: 'pay-partial-1',
+          method: 'cash',
+          amount: 400,
+          businessDayId: day.id,
+          createdAt: nowIso,
+        }),
+      ],
+    })
+
+    // 1. Masa açıkken rapor kontrolü
+    const reportWhileOpen = buildReportFromOrders([], 10, [openTable], day.id, [])
+    expect(reportWhileOpen.grossItemsRevenue).toBe(1000)
+    expect(reportWhileOpen.openTablesGrossRevenue).toBe(1000)
+    expect(reportWhileOpen.openTablesUnpaidBalance).toBe(600)
+    expect(reportWhileOpen.paidTablesTotal).toBe(0)
+    expect(reportWhileOpen.openTablePaymentsTotal).toBe(400)
+    expect(reportWhileOpen.openTablePaymentsByMethod).toEqual({ cash: 400, card: 0, iban: 0 })
+    expect(reportWhileOpen.totalCollectedRevenue).toBe(400)
+
+    // 2. Kalan 600 TL ödenip masa kapandığında (toplam 1000 TL, çift sayılmamalı)
+    const closedOrder = createMockOrder({
+      businessDayId: day.id,
+      date: nowIso,
+      items: [item],
+      totals: { subtotal: 1000, discount: 0, total: 1000 },
+      paymentMethod: 'cash',
+      payments: [
+        createMockPayment({ id: 'pay-partial-1', method: 'cash', amount: 400, businessDayId: day.id }),
+        createMockPayment({ id: 'pay-final-2', method: 'cash', amount: 600, businessDayId: day.id }),
+      ],
+    })
+    const emptyTable = createMockTable({ id: 'table-s5', status: 'empty', cart: [], payments: [] })
+
+    const reportAfterClose = buildReportFromOrders([closedOrder], 10, [emptyTable], day.id, [])
+    expect(reportAfterClose.grossItemsRevenue).toBe(1000)
+    expect(reportAfterClose.openTablesGrossRevenue).toBe(0)
+    expect(reportAfterClose.openTablesUnpaidBalance).toBe(0)
+    expect(reportAfterClose.paidTablesTotal).toBe(1000)
+    expect(reportAfterClose.openTablePaymentsTotal).toBe(0)
+    expect(reportAfterClose.paymentDistribution).toEqual({ cash: 1000, card: 0, iban: 0 })
+    expect(reportAfterClose.totalCollectedRevenue).toBe(1000)
+  })
+
+  // Senaryo 6 — İndirimli masa
+  it('Senaryo 6: 1000 TL adisyon, 100 TL indirim, 900 TL nakit tahsilat net ve brüt kırılımlarıyla tutarlıdır', () => {
+    const day = createMockBusinessDay({ id: 'day-s6', status: 'open', openingCash: 500 })
+    const item = createMockCartItem({ name: 'Mocha', category: 'Sıcak Kahveler', price: 250, quantity: 4 }) // 1000 TL brüt
+    const totals = calculateTotals([item], 0, 100) // 100 TL sabit indirim -> 900 TL net
+    expect(totals).toEqual({ subtotal: 1000, discount: 100, total: 900 })
+
+    const order = createMockOrder({
+      businessDayId: day.id,
+      items: [item],
+      totals,
+      discountRate: 0,
+      discountAmount: 100,
+      paymentMethod: 'cash',
+      payments: [createMockPayment({ method: 'cash', amount: 900, businessDayId: day.id })],
+    })
+
+    const report = buildReportFromOrders([order], 10, [], day.id, [])
+    expect(report.grossItemsRevenue).toBe(1000)
+    expect(report.closedTablesGrossRevenue).toBe(1000)
+    expect(report.totalDiscount).toBe(100)
+    expect(report.paidTablesTotal).toBe(900)
+    expect(report.paymentDistribution.cash).toBe(900)
+    // Brüt - İndirim = Ödenen Masalar Toplamı
+    expect(roundCurrency(report.closedTablesGrossRevenue! - report.totalDiscount)).toBe(report.paidTablesTotal)
+  })
+
+  // Senaryo 7 — İptal edilen sipariş / kalem & 1.260 TL vs 980 TL (2x140 Flat White) regresyon testi
+  it('Senaryo 7: İptal edilen sipariş ve tahsilatsız açık masa ürün iptali (2x140=280 TL Flat White) ödenen nakitten çift düşülmez', () => {
+    const day = createMockBusinessDay({ id: 'day-s7', status: 'open', openingCash: 500 })
+    const nowIso = createIstanbulDate(2026, 11, 13, 18, 0, 0).toISOString()
+
+    // 1. 500 TL sipariş oluşturulup ödeme alınmadan iptal edildi
+    const cancelledOrder = createMockOrder({
+      businessDayId: day.id,
+      date: nowIso,
+      cancelled: true,
+      cancelReason: 'Müşteri vazgeçti',
+      items: [createMockCartItem({ price: 250, quantity: 2 })],
+      totals: { subtotal: 500, discount: 0, total: 500 },
+    })
+
+    // 2. Canlı rapordaki gerçek vaka:
+    // Açık masada 2 adet Flat White (2 x 140 = 280 TL) ödeme alınmadan iade/iptal edildi,
+    // masadaki kalan 8 adet Sıcak Kahve (toplam 1.260 TL) 2 sipariş halinde nakit ödendi.
+    const refundedItemOnTable = createMockCartItem({
+      name: 'Flat White',
+      category: 'Sıcak Kahveler',
+      price: 140,
+      quantity: 2,
+      status: 'refunded',
+      refundedAt: nowIso,
+    })
+    const activeCoffee1 = createMockCartItem({
+      name: 'Flat White',
+      category: 'Sıcak Kahveler',
+      price: 140,
+      quantity: 4, // 560 TL
+    })
+    const activeCoffee2 = createMockCartItem({
+      name: 'Latte',
+      category: 'Sıcak Kahveler',
+      price: 175,
+      quantity: 4, // 700 TL
+    })
+
+    const paidOrder1 = createMockOrder({
+      businessDayId: day.id,
+      date: nowIso,
+      items: [refundedItemOnTable, activeCoffee1],
+      totals: { subtotal: 560, discount: 0, total: 560 },
+      paymentMethod: 'cash',
+      payments: [createMockPayment({ method: 'cash', amount: 560, businessDayId: day.id })],
+    })
+    const paidOrder2 = createMockOrder({
+      businessDayId: day.id,
+      date: nowIso,
+      items: [activeCoffee2],
+      totals: { subtotal: 700, discount: 0, total: 700 },
+      paymentMethod: 'cash',
+      payments: [createMockPayment({ method: 'cash', amount: 700, businessDayId: day.id })],
+    })
+
+    // Açık masada ödeme alınmadan oluşturulan iade kaydı (hem yeni paymentReceived: false hem de eski orderId'siz kayıt)
+    const unpaidOpenTableRefund = createMockRefund({
+      businessDayId: day.id,
+      tableId: 'table-1',
+      orderId: undefined,
+      amount: 280,
+      reason: 'Kalem İadesi (2x Flat White): Yanlış girildi',
+      paymentMethod: 'cash', // Eski bug'da varsayılan 'cash' yazılıyordu!
+      paymentReceived: false,
+      refundedAt: nowIso,
+    })
+
+    expect(isPaidRefund(unpaidOpenTableRefund)).toBe(false)
+
+    const report = buildReportFromOrders(
+      [cancelledOrder, paidOrder1, paidOrder2],
+      10,
+      [],
+      day.id,
+      [unpaidOpenTableRefund],
+    )
+
+    // Toplam Ciro = 1.260 TL, Ödenen Masalar Toplamı = 1.260 TL, Nakit = 1.260 TL (980 TL'ye DÜŞMEMELİ!)
+    expect(report.grossItemsRevenue).toBe(1260)
+    expect(report.paidTablesTotal).toBe(1260)
+    expect(report.paymentDistribution.cash).toBe(1260)
+    expect(report.orderCount).toBe(2)
+    expect(report.categorySales).toEqual([
+      { category: 'Sıcak Kahveler', quantity: 8, revenue: 1260, share: 100 },
+    ])
+    expect(report.cancelledCount).toBe(1)
+    expect(report.cancelledTotal).toBe(500)
+    expect(report.unpaidRefundsTotal).toBe(280)
+    expect(report.paidRefundsTotal).toBe(0)
+  })
+
+  // Senaryo 8 — Gece yarısı geçen açık gün (Europe/Istanbul)
+  it('Senaryo 8: Saat 20:00\'de açılan iş gününde 23:30 ve 01:15 ödemeleri aynı iş gününe ve doğru İstanbul saatlerine yazılır', () => {
+    const openedAt = createIstanbulDate(2026, 11, 13, 20, 0, 0).toISOString()
+    const day = createMockBusinessDay({
+      id: 'day-s8-midnight',
+      status: 'open',
+      openedAt,
+      openingCash: 500,
+    })
+
+    const orderBeforeMidnight = createMockOrder({
+      businessDayId: day.id,
+      date: createIstanbulDate(2026, 11, 13, 23, 30, 0).toISOString(),
+      items: [createMockCartItem({ price: 500, quantity: 1 })],
+      totals: { subtotal: 500, discount: 0, total: 500 },
+      paymentMethod: 'cash',
+      payments: [createMockPayment({ method: 'cash', amount: 500, businessDayId: day.id })],
+    })
+
+    const orderAfterMidnight = createMockOrder({
+      businessDayId: day.id,
+      date: createIstanbulDate(2026, 11, 14, 1, 15, 0).toISOString(),
+      items: [createMockCartItem({ price: 500, quantity: 1 })],
+      totals: { subtotal: 500, discount: 0, total: 500 },
+      paymentMethod: 'card',
+      payments: [createMockPayment({ method: 'card', amount: 500, businessDayId: day.id })],
+    })
+
+    const report = getReportForBusinessDay(day, [orderBeforeMidnight, orderAfterMidnight], 10, [], [])
+    expect(report.paidTablesTotal).toBe(1000)
+    expect(report.orderCount).toBe(2)
+    expect(report.paymentDistribution).toEqual({ cash: 500, card: 500, iban: 0 })
+
+    // Saatlik satışlar Europe/Istanbul saatine göre 23:00 ve 01:00 dilimlerinde olmalı
+    const hour23 = report.hourlySales.find((h) => h.hour === 23)
+    const hour1 = report.hourlySales.find((h) => h.hour === 1)
+    expect(hour23?.revenue).toBe(500)
+    expect(hour1?.revenue).toBe(500)
+  })
+
+  // Senaryo 9 — Çoklu ödeme + kuruş hassasiyeti
+  it('Senaryo 9: 333,33 TL + 333,33 TL + 333,34 TL çoklu ödemede kuruş kayması olmadan tam 1.000,00 TL hesaplanır', () => {
+    const day = createMockBusinessDay({ id: 'day-s9', status: 'open' })
+    expect(fromKurus(toKurus(333.33) + toKurus(333.33) + toKurus(333.34))).toBe(1000.0)
+
+    const order = createMockOrder({
+      businessDayId: day.id,
+      items: [createMockCartItem({ price: 1000, quantity: 1 })],
+      totals: { subtotal: 1000, discount: 0, total: 1000 },
+      paymentMethod: 'mixed',
+      payments: [
+        createMockPayment({ method: 'cash', amount: 333.33, businessDayId: day.id }),
+        createMockPayment({ method: 'card', amount: 333.33, businessDayId: day.id }),
+        createMockPayment({ method: 'iban', amount: 333.34, businessDayId: day.id }),
+      ],
+    })
+
+    const report = buildReportFromOrders([order], 10, [], day.id, [])
+    expect(report.paidTablesTotal).toBe(1000.0)
+    expect(
+      roundCurrency(
+        report.paymentDistribution.cash +
+          report.paymentDistribution.card +
+          report.paymentDistribution.iban,
+      ),
+    ).toBe(1000.0)
+  })
+
+  // Senaryo 10 — Nakit + Kart + IBAN = Ödenen Masalar Toplamı değişmezi (invariant) ve yöntem normalizasyonu
+  it('Senaryo 10: Nakit + Kart + IBAN = Ödenen Masalar Toplamı değişmezi tüm kombinasyonlarda ve Türkçe/İngilizce yöntem anahtarlarında korunur', () => {
+    const day = createMockBusinessDay({ id: 'day-s10', status: 'open' })
+
+    // Türkçe / büyük-küçük harfli yöntem adlarının normalize edildiğini doğrula
+    expect(normalizePaymentMethod('Nakit')).toBe('cash')
+    expect(normalizePaymentMethod('Kredi Kartı')).toBe('card')
+    expect(normalizePaymentMethod('Havale / EFT')).toBe('iban')
+
+    const orders = [
+      createMockOrder({
+        businessDayId: day.id,
+        items: [createMockCartItem({ price: 450, quantity: 1 })],
+        totals: { subtotal: 450, discount: 50, total: 400 },
+        payments: [createMockPayment({ method: 'cash', amount: 400, businessDayId: day.id })],
+      }),
+      createMockOrder({
+        businessDayId: day.id,
+        items: [createMockCartItem({ price: 750, quantity: 1 })],
+        totals: { subtotal: 750, discount: 0, total: 750 },
+        payments: [
+          createMockPayment({ method: 'card', amount: 500, businessDayId: day.id }),
+          createMockPayment({ method: 'iban', amount: 250, businessDayId: day.id }),
+        ],
+      }),
+    ]
+
+    const paidRefund = createMockRefund({
+      businessDayId: day.id,
+      orderId: orders[0].id,
+      amount: 100,
+      paymentMethod: 'cash',
+      paymentReceived: true,
+    })
+
+    const report = buildReportFromOrders(orders, 10, [], day.id, [paidRefund])
+    const distSum = roundCurrency(
+      report.paymentDistribution.cash +
+        report.paymentDistribution.card +
+        report.paymentDistribution.iban,
+    )
+
+    expect(report.paidTablesTotal).toBe(1050) // (400 + 750) - 100 = 1050
+    expect(distSum).toBe(report.paidTablesTotal)
+  })
+})
+

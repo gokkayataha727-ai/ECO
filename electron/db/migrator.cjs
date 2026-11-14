@@ -60,7 +60,7 @@ function getLineAfterItemDiscountTl(item) {
 /**
  * Computes table cart total in kuruş using the same rules as src/lib/format.ts calculateTotals.
  */
-function computeCartTotalKurus(cart, discountRate = 0) {
+function computeCartTotalKurus(cart, discountRate = 0, discountAmount = 0) {
   if (!Array.isArray(cart) || cart.length === 0) return 0
   const activeItems = cart.filter((i) => i && i.status !== 'refunded')
   const afterItemDiscountsTl = activeItems.reduce(
@@ -69,7 +69,12 @@ function computeCartTotalKurus(cart, discountRate = 0) {
   )
   const clampedRate = Math.min(1, Math.max(0, Number(discountRate) || 0))
   const orderLevelDiscountTl = Math.round(afterItemDiscountsTl * clampedRate * 100) / 100
-  const totalTl = Math.max(0, Math.round((afterItemDiscountsTl - orderLevelDiscountTl) * 100) / 100)
+  const afterRateDiscountTl = Math.max(0, Math.round((afterItemDiscountsTl - orderLevelDiscountTl) * 100) / 100)
+  const clampedFixedDiscountTl = Math.min(
+    afterRateDiscountTl,
+    Math.max(0, Math.round((Number(discountAmount) || 0) * 100) / 100),
+  )
+  const totalTl = Math.max(0, Math.round((afterRateDiscountTl - clampedFixedDiscountTl) * 100) / 100)
   return toKurus(totalTl)
 }
 
@@ -130,7 +135,7 @@ function computeFinancialSummary(data) {
       (Array.isArray(t.cart) && t.cart.some((i) => i && i.status !== 'refunded'))
     if (!isOccupied) continue
 
-    openTableCartsTotalKurus += computeCartTotalKurus(t.cart, t.discountRate || 0)
+    openTableCartsTotalKurus += computeCartTotalKurus(t.cart, t.discountRate || 0, t.discountAmount || 0)
 
     if (Array.isArray(t.payments)) {
       for (const p of t.payments) {
@@ -251,6 +256,39 @@ function compareFinancialSummaries(expected, actual) {
   }
 }
 
+function isActiveAdminUser(u) {
+  return Boolean(u && !u.isDeleted && u.status === 'active' && u.role === 'admin')
+}
+
+function mergeUsersPreservingExistingAdmins(existingUsers, incomingUsers) {
+  const existing = Array.isArray(existingUsers) ? existingUsers : []
+  const incoming = Array.isArray(incomingUsers) ? incomingUsers : []
+  if (existing.length === 0) return incoming
+  if (incoming.length === 0) return existing
+
+  // Prefer incoming records when incoming brings an active admin, otherwise prefer existing,
+  // and always preserve non-duplicate accounts (e.g. existing waiters or active admins) from the other side.
+  const primary = incoming.some(isActiveAdminUser) ? incoming : existing
+  const secondary = primary === incoming ? existing : incoming
+
+  const merged = [...primary]
+  const seenIds = new Set(primary.map((u) => u.id))
+  const seenUsernames = new Set(
+    primary
+      .filter((u) => !u.isDeleted && typeof u.username === 'string')
+      .map((u) => u.username.toLowerCase()),
+  )
+  for (const u of secondary) {
+    if (!u || !u.id || seenIds.has(u.id)) continue
+    const uname = typeof u.username === 'string' ? u.username.toLowerCase() : ''
+    if (uname && !u.isDeleted && seenUsernames.has(uname)) continue
+    merged.push(u)
+    seenIds.add(u.id)
+    if (uname && !u.isDeleted) seenUsernames.add(uname)
+  }
+  return merged
+}
+
 /**
  * Migrates validated localStorage payload into SQLite atomically.
  * - If a previous migration was interrupted ('in_progress'), cleans partial data first.
@@ -260,6 +298,8 @@ function compareFinancialSummaries(expected, actual) {
  * @param {import('better-sqlite3').Database} db
  * @param {object} payload
  * @param {object} [options]
+ * @param {boolean} [options.force]
+ * @param {boolean} [options.preserveExistingUsers]
  * @param {string} [options.failAtStep]
  * @param {(db: any) => void} [options.tamperAfterWrite]
  */
@@ -272,8 +312,21 @@ function migratePayloadToSqlite(db, payload, options = {}) {
     }
   }
 
-  // 1) Check if previous migration was interrupted
+  // 1) Never overwrite an already-completed SQLite database unless explicitly forced
   const prevStatus = getMeta(db, 'migration_status')
+  if (prevStatus === 'completed' && !options.force) {
+    return {
+      success: true,
+      alreadyMigrated: true,
+      recoveredFromInterruption: false,
+      migratedAt: getMeta(db, 'migrated_at') || new Date().toISOString(),
+      retainUntil: getMeta(db, 'legacy_retain_until') || null,
+    }
+  }
+
+  const existingUsers = getUsers(db)
+
+  // Check if previous migration was interrupted
   const wasInterrupted = prevStatus === 'in_progress'
   if (wasInterrupted) {
     clearAllOperationalData(db)
@@ -336,7 +389,13 @@ function migratePayloadToSqlite(db, payload, options = {}) {
         saveActivityLogs(db, payload.activityLogs)
       }
 
-      if (Array.isArray(payload.appUsers)) {
+      const usersToSave =
+        options.preserveExistingUsers === false
+          ? payload.appUsers
+          : mergeUsersPreservingExistingAdmins(existingUsers, payload.appUsers)
+      if (Array.isArray(usersToSave) && usersToSave.length > 0) {
+        saveUsers(db, usersToSave)
+      } else if (Array.isArray(payload.appUsers)) {
         saveUsers(db, payload.appUsers)
       }
 

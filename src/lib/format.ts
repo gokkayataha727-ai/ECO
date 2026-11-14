@@ -1,16 +1,236 @@
-import type { CartItem, ItemDiscount, OrderTotals, PaidOrderItem, PartialPayment, PaymentMethod, SelectedOption, Table } from '../types'
+import type { CartItem, ConcretePaymentMethod, ItemDiscount, OrderTotals, PaidOrderItem, PartialPayment, PaymentMethod, SelectedOption, Table } from '../types'
 import { generateUUID } from './uuid'
 
 export const formatCurrency = (value: number) =>
   new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(value)
 
-export const roundCurrency = (value: number): number =>
-  Math.round((value + Number.EPSILON) * 100) / 100
+export const toKurus = (value: unknown): number => {
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) return 0
+    return Math.round((value + Math.sign(value) * Number.EPSILON) * 100)
+  }
+  if (typeof value === 'string') {
+    const cleaned = value.trim().replace(',', '.')
+    const num = Number(cleaned)
+    if (!Number.isFinite(num)) return 0
+    return Math.round((num + Math.sign(num) * Number.EPSILON) * 100)
+  }
+  return 0
+}
+
+export const fromKurus = (kurus: number): number => {
+  if (!Number.isFinite(kurus)) return 0
+  return Math.round(kurus) / 100
+}
+
+export const roundCurrency = (value: number): number => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    const parsed = Number(typeof value === 'string' ? (value as string).trim().replace(',', '.') : 0)
+    if (!Number.isFinite(parsed)) return 0
+    return Math.round((parsed + Math.sign(parsed) * Number.EPSILON) * 100) / 100
+  }
+  return Math.round((value + Math.sign(value) * Number.EPSILON) * 100) / 100
+}
+
+/**
+ * Normalizes any raw/legacy payment method string into a strict concrete payment method ('cash' | 'card' | 'iban').
+ */
+export const normalizePaymentMethod = (
+  raw: unknown,
+  fallback: ConcretePaymentMethod = 'cash',
+): ConcretePaymentMethod => {
+  if (typeof raw !== 'string') return fallback
+  const s = raw
+    .trim()
+    .toLocaleLowerCase('tr-TR')
+    .replace(/ı/g, 'i')
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ş/g, 's')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c')
+    .replace(/[\s_-]+/g, '')
+
+  if (!s) return fallback
+
+  if (
+    s === 'card' ||
+    s === 'kart' ||
+    s === 'kredikarti' ||
+    s === 'creditcard' ||
+    s === 'pos' ||
+    s === 'bankakarti' ||
+    s.includes('kart') ||
+    s.includes('card')
+  ) {
+    return 'card'
+  }
+
+  if (
+    s === 'iban' ||
+    s === 'havale' ||
+    s === 'eft' ||
+    s === 'fast' ||
+    s === 'banka' ||
+    s === 'transfer' ||
+    s.includes('iban') ||
+    s.includes('havale') ||
+    s.includes('eft')
+  ) {
+    return 'iban'
+  }
+
+  if (
+    s === 'cash' ||
+    s === 'nakit' ||
+    s === 'pesin' ||
+    s.includes('nakit') ||
+    s.includes('cash')
+  ) {
+    return 'cash'
+  }
+
+  return fallback
+}
+
+/**
+ * Normalizes order-level payment method (includes 'mixed').
+ */
+export const normalizeOrderPaymentMethod = (
+  raw: unknown,
+  fallback: ConcretePaymentMethod = 'cash',
+): PaymentMethod => {
+  if (typeof raw === 'string') {
+    const lower = raw.trim().toLocaleLowerCase('tr-TR')
+    if (
+      lower === 'mixed' ||
+      lower.includes('karışık') ||
+      lower.includes('karisik') ||
+      lower.includes('parçalı') ||
+      lower.includes('parcali')
+    ) {
+      return 'mixed'
+    }
+  }
+  return normalizePaymentMethod(raw, fallback)
+}
+
+export const isValidPaymentMovement = (
+  p: PartialPayment | null | undefined,
+): p is PartialPayment => {
+  if (!p) return false
+  const status = p.status || 'GECERLI'
+  if (status === 'IPTAL') return false
+  return Number.isFinite(p.amount) && toKurus(p.amount) > 0
+}
 
 export const derivePaymentState = (grandTotal: number, payments: PartialPayment[] = []) => {
-  const paidTotal = roundCurrency(payments.reduce((sum, p) => sum + p.amount, 0))
-  const remaining = Math.max(0, roundCurrency(grandTotal - paidTotal))
-  return { paidTotal, remaining }
+  const grandTotalKurus = Math.max(0, toKurus(grandTotal))
+  let validPaymentsKurus = 0
+  let refundMovementsKurus = 0
+
+  for (const p of payments || []) {
+    if (!isValidPaymentMovement(p)) continue
+    const amtKurus = Math.max(0, toKurus(p.amount))
+    if (p.type === 'IADE') {
+      refundMovementsKurus += amtKurus
+    } else {
+      validPaymentsKurus += amtKurus
+    }
+  }
+
+  const paidTotalKurus = Math.max(0, validPaymentsKurus - refundMovementsKurus)
+  const remainingKurus = Math.max(0, grandTotalKurus - paidTotalKurus)
+  const overpaymentKurus = Math.max(0, paidTotalKurus - grandTotalKurus)
+  const paidTotal = fromKurus(paidTotalKurus)
+  const remaining = fromKurus(remainingKurus)
+  const overpayment = fromKurus(overpaymentKurus)
+  const isFullyPaid = grandTotalKurus > 0 && remainingKurus === 0
+
+  return { paidTotal, remaining, overpayment, isFullyPaid }
+}
+
+export type AdisyonDurum = 'ACIK' | 'KISMI_ODENDI' | 'ODENDI' | 'KAPALI' | 'IPTAL'
+
+export interface AdisyonBakiyeResult {
+  araToplam: number
+  indirim: number
+  kdv: number
+  genelToplam: number
+  odenen: number
+  kalan: number
+  fazlaOdeme: number
+  durum: AdisyonDurum
+}
+
+export const hesaplaAdisyonBakiye = (
+  adisyon: {
+    cart?: CartItem[]
+    items?: CartItem[]
+    totals?: OrderTotals
+    discountRate?: number
+    discountAmount?: number
+    taxRate?: number
+    payments?: PartialPayment[]
+    cancelled?: boolean
+    reopened?: boolean
+    isClosed?: boolean
+  },
+  odemeHareketleri?: PartialPayment[],
+): AdisyonBakiyeResult => {
+  const items = adisyon.cart ?? adisyon.items ?? []
+  const totals =
+    adisyon.totals ??
+    calculateTotals(items, adisyon.discountRate || 0, adisyon.discountAmount || 0)
+
+  const araToplam = fromKurus(Math.max(0, toKurus(totals.subtotal)))
+  const indirim = fromKurus(Math.max(0, toKurus(totals.discount)))
+  const genelToplam = fromKurus(Math.max(0, toKurus(totals.total)))
+
+  const movements = odemeHareketleri ?? adisyon.payments ?? []
+  const { paidTotal: odenen, remaining: kalan, overpayment: fazlaOdeme } = derivePaymentState(
+    genelToplam,
+    movements,
+  )
+
+  const taxRate = typeof adisyon.taxRate === 'number' ? adisyon.taxRate : 10
+  let cardPaidKurus = 0
+  for (const p of movements) {
+    if (!isValidPaymentMovement(p)) continue
+    if (normalizePaymentMethod(p.method, 'cash') !== 'card') continue
+    const amtKurus = Math.max(0, toKurus(p.amount))
+    if (p.type === 'IADE') {
+      cardPaidKurus = Math.max(0, cardPaidKurus - amtKurus)
+    } else {
+      cardPaidKurus += amtKurus
+    }
+  }
+  const kdv =
+    taxRate > 0 && cardPaidKurus > 0
+      ? roundCurrency((fromKurus(cardPaidKurus) * taxRate) / 100)
+      : 0
+
+  let durum: AdisyonDurum = 'ACIK'
+  if (adisyon.cancelled || adisyon.reopened) {
+    durum = 'IPTAL'
+  } else if (adisyon.isClosed) {
+    durum = 'KAPALI'
+  } else if (genelToplam > 0 && kalan === 0) {
+    durum = 'ODENDI'
+  } else if (odenen > 0) {
+    durum = 'KISMI_ODENDI'
+  }
+
+  return {
+    araToplam,
+    indirim,
+    kdv,
+    genelToplam,
+    odenen,
+    kalan,
+    fazlaOdeme,
+    durum,
+  }
 }
 
 export const formatIban = (raw: string): string => {
@@ -63,19 +283,21 @@ export const calculateTotals = (cart: CartItem[], discountRate: number, discount
 }
 
 export const paymentMethodLabel = (method: PaymentMethod) => {
+  const normalized = normalizeOrderPaymentMethod(method)
   const labels: Record<PaymentMethod, string> = {
     card: 'Kart',
     cash: 'Nakit',
     iban: 'IBAN',
     mixed: 'Karışık Ödeme',
   }
-  return labels[method] || 'Kart'
+  return labels[normalized] || 'Nakit'
 }
 
 export const isTableOccupied = (table: Table): boolean => {
   const hasCustomer = Boolean(table.customerName && table.customerName.trim().length > 0)
   const activeItems = table.cart.filter((item) => item.status !== 'refunded')
-  return activeItems.length > 0 || (table.cart.length > 0 && (table.payments?.length ?? 0) > 0) || table.status === 'occupied' || hasCustomer
+  const validPayments = (table.payments || []).filter((p) => isValidPaymentMovement(p) && p.type !== 'IADE')
+  return activeItems.length > 0 || (table.cart.length > 0 && validPayments.length > 0) || table.status === 'occupied' || hasCustomer
 }
 
 export interface LinePaymentState {
@@ -131,12 +353,13 @@ export const deriveLinePaymentStates = (
     let lastMethod: 'card' | 'cash' | 'iban' | undefined
 
     for (const p of payments) {
+      if (!isValidPaymentMovement(p) || p.type === 'IADE') continue
       if (!p.items) continue
       for (const pi of p.items) {
         if (pi.lineId === item.cartItemId) {
           rawPaidQty += pi.quantity
           rawPaidAmount += pi.amount
-          lastMethod = p.method
+          lastMethod = normalizePaymentMethod(p.method)
         }
       }
     }
@@ -622,6 +845,19 @@ export const formatTime = (
   if (fallbackResult !== null) return fallbackResult
 
   return ''
+}
+
+export const formatDateTime = (value: string | number | Date | undefined | null): string => {
+  if (!value) return ''
+  const d = value instanceof Date ? value : new Date(value)
+  if (Number.isNaN(d.getTime())) return String(value)
+  return d.toLocaleString('tr-TR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 /**

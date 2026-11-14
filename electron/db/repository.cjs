@@ -10,6 +10,32 @@ const OPEN_TABLE_ORDER_PREFIX = 'open_table_order::'
 const GENESIS_LOG_HASH = '0000000000000000000000000000000000000000000000000000000000000000'
 const ARCHIVE_ANCHOR_META_KEY = 'activity_logs_archive_anchor_hash'
 const CHAIN_HEAD_META_KEY = 'activity_logs_head_hash'
+const { ensureActivityLogChainSchema } = require('./schema.cjs')
+
+function normalizePaymentMethodCjs(raw, fallback = 'cash') {
+  if (!raw || typeof raw !== 'string') return fallback
+  const cleaned = raw.trim().toLowerCase()
+  if (cleaned === 'card' || cleaned === 'credit_card' || cleaned === 'creditcard' || cleaned === 'pos' || cleaned === 'kart' || cleaned === 'kredi kartı' || cleaned === 'kredi karti') {
+    return 'card'
+  }
+  if (cleaned === 'iban' || cleaned === 'transfer' || cleaned === 'bank_transfer' || cleaned === 'havale' || cleaned === 'eft') {
+    return 'iban'
+  }
+  if (cleaned === 'cash' || cleaned === 'nakit') {
+    return 'cash'
+  }
+  return fallback
+}
+
+function normalizeOrderPaymentMethodCjs(raw, fallback = 'cash') {
+  if (typeof raw === 'string') {
+    const cleaned = raw.trim().toLowerCase()
+    if (cleaned === 'mixed' || cleaned === 'split' || cleaned === 'parçalı' || cleaned === 'parcali') {
+      return 'mixed'
+    }
+  }
+  return normalizePaymentMethodCjs(raw, fallback)
+}
 
 function computeActivityLogHashCjs(log, prevHash) {
   const amountKurus =
@@ -227,11 +253,13 @@ function insertPaymentsForOrder(db, orderId, tableId, payments) {
     INSERT INTO payments (
       order_id, id, sort_order, table_id, business_day_id, method,
       amount_kurus, received_amount_kurus, change_kurus, created_at,
-      cashier, user_id, is_manual_amount, selected_items_total_kurus, paid_items_json
+      cashier, user_id, is_manual_amount, selected_items_total_kurus, paid_items_json,
+      type, status, cancelled_reason, cancelled_by, cancelled_at, reversal_of_id
     ) VALUES (
       @order_id, @id, @sort_order, @table_id, @business_day_id, @method,
       @amount_kurus, @received_amount_kurus, @change_kurus, @created_at,
-      @cashier, @user_id, @is_manual_amount, @selected_items_total_kurus, @paid_items_json
+      @cashier, @user_id, @is_manual_amount, @selected_items_total_kurus, @paid_items_json,
+      @type, @status, @cancelled_reason, @cancelled_by, @cancelled_at, @reversal_of_id
     )
   `)
 
@@ -251,9 +279,9 @@ function insertPaymentsForOrder(db, orderId, tableId, payments) {
       order_id: orderId,
       id: p.id || `pay_${index}`,
       sort_order: index,
-      table_id: tableId ?? null,
+      table_id: p.tableId ?? tableId ?? null,
       business_day_id: p.businessDayId ?? null,
-      method: p.method || 'cash',
+      method: normalizePaymentMethodCjs(p.method, 'cash'),
       amount_kurus: toKurus(p.amount),
       received_amount_kurus: toKurusNullable(p.receivedAmount),
       change_kurus: toKurusNullable(p.change),
@@ -264,6 +292,12 @@ function insertPaymentsForOrder(db, orderId, tableId, payments) {
         p.isManualAmount === undefined ? null : p.isManualAmount ? 1 : 0,
       selected_items_total_kurus: toKurusNullable(p.selectedItemsTotal),
       paid_items_json: paidItemsJson,
+      type: p.type === 'IADE' ? 'IADE' : 'ODEME',
+      status: p.status === 'IPTAL' ? 'IPTAL' : 'GECERLI',
+      cancelled_reason: p.cancelledReason ?? null,
+      cancelled_by: p.cancelledBy ?? null,
+      cancelled_at: p.cancelledAt ?? null,
+      reversal_of_id: p.reversalOfId ?? null,
     })
   })
 }
@@ -271,9 +305,15 @@ function insertPaymentsForOrder(db, orderId, tableId, payments) {
 function mapRowToPayment(row) {
   const payment = {
     id: row.id,
-    method: row.method,
+    type: row.type === 'IADE' ? 'IADE' : 'ODEME',
+    status: row.status === 'IPTAL' ? 'IPTAL' : 'GECERLI',
+    method: normalizePaymentMethodCjs(row.method, 'cash'),
     amount: fromKurus(row.amount_kurus),
     createdAt: row.created_at,
+  }
+
+  if (row.order_id && !String(row.order_id).startsWith(OPEN_TABLE_ORDER_PREFIX)) {
+    payment.orderId = row.order_id
   }
 
   const received = fromKurusOptional(row.received_amount_kurus)
@@ -282,9 +322,14 @@ function mapRowToPayment(row) {
   const change = fromKurusOptional(row.change_kurus)
   if (change !== undefined) payment.change = change
 
+  if (row.table_id) payment.tableId = row.table_id
   if (row.business_day_id) payment.businessDayId = row.business_day_id
   if (row.cashier) payment.cashier = row.cashier
   if (row.user_id) payment.userId = row.user_id
+  if (row.cancelled_reason) payment.cancelledReason = row.cancelled_reason
+  if (row.cancelled_by) payment.cancelledBy = row.cancelled_by
+  if (row.cancelled_at) payment.cancelledAt = row.cancelled_at
+  if (row.reversal_of_id) payment.reversalOfId = row.reversal_of_id
   if (row.is_manual_amount !== null && row.is_manual_amount !== undefined) {
     payment.isManualAmount = Boolean(row.is_manual_amount)
   }
@@ -316,6 +361,7 @@ function mapRowToPayment(row) {
 // ────────────────────────────────────────────────────────────
 
 function getTables(db) {
+  ensureActivityLogChainSchema(db)
   const tableRows = db
     .prepare('SELECT * FROM tables ORDER BY sort_order ASC, rowid ASC')
     .all()
@@ -332,6 +378,7 @@ function getTables(db) {
     const openOrderId = `${OPEN_TABLE_ORDER_PREFIX}${row.id}`
     const itemRows = itemStmt.all(openOrderId)
     const paymentRows = paymentStmt.all(openOrderId)
+    const discountAmountVal = fromKurusOptional(row.discount_amount_kurus)
 
     const table = {
       id: row.id,
@@ -339,6 +386,7 @@ function getTables(db) {
       status: row.status === 'occupied' ? 'occupied' : 'empty',
       cart: itemRows.map(mapRowToCartItem),
       discountRate: typeof row.discount_rate === 'number' ? row.discount_rate : 0,
+      discountAmount: discountAmountVal !== undefined ? discountAmountVal : 0,
       payments: paymentRows.map(mapRowToPayment),
     }
 
@@ -355,6 +403,7 @@ function saveTables(db, tables) {
   if (!Array.isArray(tables)) {
     throw new Error('tables dizi (array) olmalıdır.')
   }
+  ensureActivityLogChainSchema(db)
 
   const run = db.transaction((list) => {
     // Delete all existing open table orders (cascades to order_items and payments for open tables)
@@ -363,22 +412,23 @@ function saveTables(db, tables) {
 
     const now = new Date().toISOString()
     const insertTableStmt = db.prepare(`
-      INSERT INTO tables (id, name, status, note, customer_name, discount_rate, sort_order, updated_at)
-      VALUES (@id, @name, @status, @note, @customer_name, @discount_rate, @sort_order, @updated_at)
+      INSERT INTO tables (id, name, status, note, customer_name, discount_rate, discount_amount_kurus, sort_order, updated_at)
+      VALUES (@id, @name, @status, @note, @customer_name, @discount_rate, @discount_amount_kurus, @sort_order, @updated_at)
     `)
     const insertOpenOrderStmt = db.prepare(`
       INSERT INTO orders (
         id, order_number, state, table_id, table_name,
-        subtotal_kurus, discount_kurus, total_kurus, discount_rate, tax_rate,
+        subtotal_kurus, discount_kurus, total_kurus, discount_rate, discount_amount_kurus, tax_rate,
         date, note, customer_name, cancelled, reopened, sort_order
       ) VALUES (
         @id, @order_number, 'open', @table_id, @table_name,
-        0, 0, 0, @discount_rate, 10,
+        0, 0, 0, @discount_rate, @discount_amount_kurus, 10,
         @date, @note, @customer_name, 0, 0, @sort_order
       )
     `)
 
     list.forEach((t, idx) => {
+      const discAmtKurus = Math.max(0, toKurus(t.discountAmount || 0))
       insertTableStmt.run({
         id: t.id,
         name: t.name,
@@ -386,6 +436,7 @@ function saveTables(db, tables) {
         note: t.note ?? null,
         customer_name: t.customerName ?? null,
         discount_rate: typeof t.discountRate === 'number' ? t.discountRate : 0,
+        discount_amount_kurus: discAmtKurus,
         sort_order: idx,
         updated_at: now,
       })
@@ -401,6 +452,7 @@ function saveTables(db, tables) {
           table_id: t.id,
           table_name: t.name,
           discount_rate: typeof t.discountRate === 'number' ? t.discountRate : 0,
+          discount_amount_kurus: discAmtKurus,
           date: now,
           note: t.note ?? null,
           customer_name: t.customerName ?? null,
@@ -426,6 +478,7 @@ function saveTables(db, tables) {
 // ────────────────────────────────────────────────────────────
 
 function getCompletedOrders(db) {
+  ensureActivityLogChainSchema(db)
   const orderRows = db
     .prepare("SELECT * FROM orders WHERE state != 'open' ORDER BY sort_order ASC, rowid ASC")
     .all()
@@ -440,6 +493,7 @@ function getCompletedOrders(db) {
   return orderRows.map((row) => {
     const itemRows = itemStmt.all(row.id)
     const paymentRows = paymentStmt.all(row.id)
+    const discAmtVal = fromKurusOptional(row.discount_amount_kurus)
 
     const order = {
       id: row.id,
@@ -450,10 +504,11 @@ function getCompletedOrders(db) {
         discount: fromKurus(row.discount_kurus),
         total: fromKurus(row.total_kurus),
       },
-      paymentMethod: row.payment_method || 'cash',
+      paymentMethod: normalizeOrderPaymentMethodCjs(row.payment_method, 'cash'),
       payments: paymentRows.map(mapRowToPayment),
       date: row.date,
       discountRate: typeof row.discount_rate === 'number' ? row.discount_rate : 0,
+      ...(discAmtVal && discAmtVal > 0 ? { discountAmount: discAmtVal } : {}),
       taxRate: typeof row.tax_rate === 'number' ? row.tax_rate : 10,
       cancelled: Boolean(row.cancelled),
       reopened: Boolean(row.reopened),
@@ -475,12 +530,20 @@ function getCompletedOrders(db) {
     if (row.reopened_at) order.reopenedAt = row.reopened_at
     if (row.reopen_reason) order.reopenReason = row.reopen_reason
     if (row.reopened_by) order.reopenedBy = row.reopened_by
+    if (row.reopened_to_table_id) order.reopenedToTableId = row.reopened_to_table_id
+    if (row.reopened_to_table_name) order.reopenedToTableName = row.reopened_to_table_name
+    const cancelledPayTotal = fromKurusOptional(row.cancelled_payments_total_kurus)
+    if (cancelledPayTotal !== undefined) order.cancelledPaymentsTotal = cancelledPayTotal
+    if (row.cancelled_payments_summary) {
+      order.cancelledPaymentsSummary = row.cancelled_payments_summary
+    }
 
     return order
   })
 }
 
 function insertSingleCompletedOrder(db, order, sortOrder = 0) {
+  ensureActivityLogChainSchema(db)
   const state = order.cancelled
     ? 'cancelled'
     : order.reopened
@@ -490,14 +553,18 @@ function insertSingleCompletedOrder(db, order, sortOrder = 0) {
   db.prepare(`
     INSERT INTO orders (
       id, order_number, state, table_id, table_name, business_day_id,
-      subtotal_kurus, discount_kurus, total_kurus, discount_rate, tax_rate,
+      subtotal_kurus, discount_kurus, total_kurus, discount_rate, discount_amount_kurus, tax_rate,
       payment_method, date, note, customer_name, cashier,
-      cancelled, cancelled_at, reopened, reopened_at, reopen_reason, reopened_by, sort_order
+      cancelled, cancelled_at, reopened, reopened_at, reopen_reason, reopened_by,
+      reopened_to_table_id, reopened_to_table_name, cancelled_payments_total_kurus, cancelled_payments_summary,
+      sort_order
     ) VALUES (
       @id, @order_number, @state, @table_id, @table_name, @business_day_id,
-      @subtotal_kurus, @discount_kurus, @total_kurus, @discount_rate, @tax_rate,
+      @subtotal_kurus, @discount_kurus, @total_kurus, @discount_rate, @discount_amount_kurus, @tax_rate,
       @payment_method, @date, @note, @customer_name, @cashier,
-      @cancelled, @cancelled_at, @reopened, @reopened_at, @reopen_reason, @reopened_by, @sort_order
+      @cancelled, @cancelled_at, @reopened, @reopened_at, @reopen_reason, @reopened_by,
+      @reopened_to_table_id, @reopened_to_table_name, @cancelled_payments_total_kurus, @cancelled_payments_summary,
+      @sort_order
     )
   `).run({
     id: order.id,
@@ -510,8 +577,9 @@ function insertSingleCompletedOrder(db, order, sortOrder = 0) {
     discount_kurus: toKurus(order.totals?.discount),
     total_kurus: toKurus(order.totals?.total),
     discount_rate: typeof order.discountRate === 'number' ? order.discountRate : 0,
+    discount_amount_kurus: Math.max(0, toKurus(order.discountAmount || 0)),
     tax_rate: typeof order.taxRate === 'number' ? order.taxRate : 10,
-    payment_method: order.paymentMethod || 'cash',
+    payment_method: normalizeOrderPaymentMethodCjs(order.paymentMethod, 'cash'),
     date: order.date || new Date().toISOString(),
     note: order.note ?? null,
     customer_name: order.customerName ?? null,
@@ -522,6 +590,10 @@ function insertSingleCompletedOrder(db, order, sortOrder = 0) {
     reopened_at: order.reopenedAt ?? null,
     reopen_reason: order.reopenReason ?? null,
     reopened_by: order.reopenedBy ?? null,
+    reopened_to_table_id: order.reopenedToTableId ?? null,
+    reopened_to_table_name: order.reopenedToTableName ?? null,
+    cancelled_payments_total_kurus: toKurusNullable(order.cancelledPaymentsTotal),
+    cancelled_payments_summary: order.cancelledPaymentsSummary ?? null,
     sort_order: sortOrder,
   })
 
@@ -873,6 +945,7 @@ function saveMenuProducts(db, products) {
 // ────────────────────────────────────────────────────────────
 
 function getRefunds(db) {
+  ensureActivityLogChainSchema(db)
   const rows = db
     .prepare('SELECT * FROM refunds ORDER BY sort_order ASC, rowid ASC')
     .all()
@@ -894,7 +967,12 @@ function getRefunds(db) {
     const unitPrice = fromKurusOptional(row.unit_price_kurus)
     if (unitPrice !== undefined) refund.unitPrice = unitPrice
 
-    if (row.payment_method) refund.paymentMethod = row.payment_method
+    if (row.payment_method) {
+      refund.paymentMethod = normalizePaymentMethodCjs(row.payment_method, 'cash')
+    }
+    if (row.payment_received !== null && row.payment_received !== undefined) {
+      refund.paymentReceived = Boolean(row.payment_received)
+    }
     if (row.created_at) refund.createdAt = row.created_at
     if (row.created_by) refund.createdBy = row.created_by
     if (row.refunded_at) refund.refundedAt = row.refunded_at
@@ -926,6 +1004,7 @@ function getRefunds(db) {
 }
 
 function insertSingleRefund(db, r, sortOrder = 0) {
+  ensureActivityLogChainSchema(db)
   let itemsJson = null
   if (Array.isArray(r.items)) {
     itemsJson = JSON.stringify(
@@ -943,12 +1022,12 @@ function insertSingleRefund(db, r, sortOrder = 0) {
     INSERT INTO refunds (
       id, business_day_id, order_id, table_id, table_name,
       order_item_id, product_name, quantity, unit_price_kurus,
-      amount_kurus, payment_method, reason,
+      amount_kurus, payment_method, payment_received, reason,
       created_at, created_by, refunded_at, refunded_by, items_json, sort_order
     ) VALUES (
       @id, @business_day_id, @order_id, @table_id, @table_name,
       @order_item_id, @product_name, @quantity, @unit_price_kurus,
-      @amount_kurus, @payment_method, @reason,
+      @amount_kurus, @payment_method, @payment_received, @reason,
       @created_at, @created_by, @refunded_at, @refunded_by, @items_json, @sort_order
     )
   `).run({
@@ -962,7 +1041,9 @@ function insertSingleRefund(db, r, sortOrder = 0) {
     quantity: typeof r.quantity === 'number' ? r.quantity : null,
     unit_price_kurus: toKurusNullable(r.unitPrice),
     amount_kurus: Math.max(0, toKurus(r.amount)),
-    payment_method: r.paymentMethod ?? null,
+    payment_method: r.paymentMethod ? normalizePaymentMethodCjs(r.paymentMethod, 'cash') : null,
+    payment_received:
+      typeof r.paymentReceived === 'boolean' ? (r.paymentReceived ? 1 : 0) : null,
     reason: r.reason || 'İade',
     created_at: r.createdAt ?? null,
     created_by: r.createdBy ?? null,

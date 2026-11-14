@@ -278,6 +278,8 @@ export function CloseDayModal({
     const finalSnapshot = buildReportFromOrders(
       orders.filter((o) => o.businessDayId === openDay.id),
       settings.taxRate,
+      undefined,
+      openDay.id,
     )
 
     const enteredZVal = hasEnteredZ && isEnteredZValid ? parsedEnteredZ : undefined
@@ -289,6 +291,7 @@ export function CloseDayModal({
       closedAt: new Date().toISOString(),
       closedBy: settings.cashierName || 'LEMOON',
       countedCash,
+      closingCash: countedCash,
       expectedCash,
       cashDifference,
       closeNote: closeNote.trim() || undefined,

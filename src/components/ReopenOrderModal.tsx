@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { AlertCircle, RotateCcw, X, ShieldAlert } from 'lucide-react'
-import { formatCurrency } from '../lib/format'
+import { useEffect, useState } from 'react'
+import { AlertCircle, Info, RotateCcw, ShieldAlert, X } from 'lucide-react'
+import { formatCurrency, formatDateTime, isTableOccupied } from '../lib/format'
+import { formatReopenCancellationNotice } from '../lib/reopenOrder'
 import type { CompletedOrder, Table } from '../types'
 
 interface ReopenOrderModalProps {
@@ -12,7 +13,6 @@ interface ReopenOrderModalProps {
   onConfirmReopen: (params: {
     orderId: string
     reason: string
-    paymentAction: 'keep' | 'cancel'
     targetTableId: string
   }) => void
 }
@@ -26,34 +26,56 @@ export function ReopenOrderModal({
   onConfirmReopen,
 }: ReopenOrderModalProps) {
   const [reason, setReason] = useState('')
-  const [paymentAction, setPaymentAction] = useState<'keep' | 'cancel'>('keep')
   const [targetTableId, setTargetTableId] = useState<string>(() => {
-    if (order?.tableId) return order.tableId
-    const firstEmpty = tables.find((t) => t.status === 'empty')
+    if (order?.tableId && tables.some((t) => t.id === order.tableId)) {
+      return order.tableId
+    }
+    const firstEmpty = tables.find((t) => !isTableOccupied(t))
     return firstEmpty ? firstEmpty.id : (tables[0]?.id || '')
   })
   const [isConfirming, setIsConfirming] = useState(false)
 
+  useEffect(() => {
+    if (!isOpen || !order) return
+    setReason('')
+    setIsConfirming(false)
+    if (order.tableId && tables.some((t) => t.id === order.tableId)) {
+      setTargetTableId(order.tableId)
+      return
+    }
+    const firstEmpty = tables.find((t) => !isTableOccupied(t))
+    setTargetTableId(firstEmpty ? firstEmpty.id : (tables[0]?.id || ''))
+  }, [isOpen, order?.id])
+
   if (!isOpen || !order) return null
 
-  // Safety rule check:
-  // Is this order belonging to the currently open business day?
+  // Kural 8 & Bölüm 4.2: Geri açma yalnızca aktif (kapanmamış) iş gününe ait adisyonlarda yapılabilir
   const isOrderFromOpenDay =
     Boolean(openBusinessDayId) && order.businessDayId === openBusinessDayId
 
-  const isReasonValid = reason.trim().length > 0
+  const trimmedReason = reason.trim()
+  const isReasonValid = trimmedReason.length >= 3
+
+  const selectedTable = tables.find((t) => t.id === targetTableId)
+  const isSelectedTableOccupied = selectedTable ? isTableOccupied(selectedTable) : false
+  const canProceed =
+    isOrderFromOpenDay &&
+    isReasonValid &&
+    Boolean(selectedTable) &&
+    !isSelectedTableOccupied
+
+  const cancellationNoticeText = formatReopenCancellationNotice(order)
 
   const handleProceed = () => {
-    if (!isReasonValid) return
+    if (!canProceed) return
     setIsConfirming(true)
   }
 
   const handleFinalSubmit = () => {
-    if (!isReasonValid) return
+    if (!canProceed) return
     onConfirmReopen({
       orderId: order.id,
-      reason: reason.trim(),
-      paymentAction,
+      reason: trimmedReason,
       targetTableId,
     })
     setIsConfirming(false)
@@ -102,7 +124,7 @@ export function ReopenOrderModal({
           <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 space-y-2 text-xs text-rose-900 dark:text-rose-200">
             <div className="flex items-center gap-2 font-bold text-sm">
               <ShieldAlert size={18} className="text-rose-600" />
-              <span>Bu Adisyon Geri Açılamaz</span>
+              <span>Bu adisyon kapanmış bir güne ait, geri açılamaz</span>
             </div>
             <p className="text-[11px] leading-relaxed text-rose-800 dark:text-rose-300">
               Bu adisyon kapanmış veya arşivlenmiş bir iş gününe aittir (Z raporu
@@ -121,23 +143,26 @@ export function ReopenOrderModal({
           </div>
         ) : !isConfirming ? (
           <div className="space-y-4 text-xs">
-            {/* Order info summary */}
-            <div className="p-3.5 rounded-xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-800 flex justify-between items-center">
-              <div>
+            {/* Sipariş özeti (adisyon no, tarih/saat, kalemler ve toplam tutar) */}
+            <div className="p-3.5 rounded-xl bg-stone-50 dark:bg-stone-800/60 border border-stone-200 dark:border-stone-800 flex justify-between items-center gap-3">
+              <div className="min-w-0">
                 <div className="font-bold text-stone-800 dark:text-stone-200">
-                  {order.tableName || order.orderNumber}
+                  {order.tableName || `Adisyon #${order.orderNumber}`}
                   {order.customerName ? ` · ${order.customerName}` : ''}
                 </div>
-                <div className="text-[11px] text-stone-500">
+                <div className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5">
+                  #{order.orderNumber} · {formatDateTime(order.date)}
+                </div>
+                <div className="text-[11px] text-stone-500 truncate mt-0.5">
                   {order.items.map((i) => `${i.name} ×${i.quantity}`).join(', ')}
                 </div>
               </div>
-              <strong className="text-sm font-extrabold text-stone-900 dark:text-stone-100">
+              <strong className="text-sm font-extrabold text-stone-900 dark:text-stone-100 shrink-0">
                 {formatCurrency(order.totals.total)}
               </strong>
             </div>
 
-            {/* Target Table Selector */}
+            {/* Açılacak Masa seçici */}
             <div>
               <label className="block text-xs font-bold text-stone-800 dark:text-stone-200 mb-1.5">
                 Açılacak Masa
@@ -147,90 +172,59 @@ export function ReopenOrderModal({
                 onChange={(e) => setTargetTableId(e.target.value)}
                 className="w-full px-3 py-2 text-xs font-semibold rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
-                {tables.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} {t.status === 'occupied' ? '(Dolu)' : '(Boş)'}
-                  </option>
-                ))}
+                {tables.map((t) => {
+                  const occupied = isTableOccupied(t)
+                  return (
+                    <option key={t.id} value={t.id}>
+                      {t.name} {occupied ? '(Dolu)' : '(Boş)'}
+                    </option>
+                  )
+                })}
               </select>
+
+              {isSelectedTableOccupied && (
+                <div
+                  role="alert"
+                  className="mt-2 p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800 flex items-start gap-2 text-[11px] font-semibold text-amber-900 dark:text-amber-200"
+                >
+                  <AlertCircle size={15} className="text-amber-600 shrink-0 mt-0.5" />
+                  <span>
+                    Bu masada aktif bir adisyon var, önce onu kapatın ya da başka masa seçin
+                  </span>
+                </div>
+              )}
             </div>
 
-            {/* Reopening Reason (Mandatory) */}
+            {/* Geri Açma Sebebi (zorunlu alan, en az 3 karakter) */}
             <div>
               <label className="block text-xs font-bold text-stone-800 dark:text-stone-200 mb-1.5">
-                Geri Açma Sebebi <span className="text-rose-500">* (Zorunlu)</span>
+                Geri Açma Sebebi{' '}
+                <span className="text-rose-500">* (Zorunlu, en az 3 karakter)</span>
               </label>
               <input
                 type="text"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
-                placeholder="Örn: Müşteri ek sipariş vermek istedi, masa birleştirilecek..."
+                placeholder="Örn: Müşteri ek sipariş vermek istedi, ödeme yöntemi değişecek..."
                 className="w-full px-3.5 py-2.5 text-xs font-medium rounded-xl border border-stone-300 dark:border-stone-700 bg-stone-50 dark:bg-stone-800 text-stone-800 dark:text-stone-100 focus:outline-none focus:ring-2 focus:ring-purple-500"
                 autoFocus
               />
+              {reason.length > 0 && !isReasonValid && (
+                <p className="mt-1 text-[11px] text-rose-600 dark:text-rose-400 font-medium">
+                  Geri açma sebebi en az 3 karakter olmalıdır.
+                </p>
+              )}
             </div>
 
-            {/* Payment Handling Options */}
-            <div>
-              <label className="block text-xs font-bold text-stone-800 dark:text-stone-200 mb-1.5">
-                Önceki Ödeme Kayıtları Nasıl İşlensin?
-              </label>
-              <div className="grid grid-cols-1 gap-2.5">
-                {/* Option A: Keep Payment */}
-                <button
-                  type="button"
-                  onClick={() => setPaymentAction('keep')}
-                  className={`p-3 rounded-xl border text-left transition-all flex items-start gap-3 ${
-                    paymentAction === 'keep'
-                      ? 'border-purple-600 bg-purple-50/70 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 ring-1 ring-purple-500'
-                      : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:border-stone-300'
-                  }`}
-                >
-                  <div className="w-5 h-5 rounded-full border border-purple-500 flex items-center justify-center shrink-0 mt-0.5">
-                    {paymentAction === 'keep' && (
-                      <div className="w-2.5 h-2.5 rounded-full bg-purple-600" />
-                    )}
-                  </div>
-                  <div>
-                    <div className="font-bold text-xs">
-                      (a) Ödemeyi Koru ve Üzerine Ekle (Önerilen)
-                    </div>
-                    <div className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5">
-                      Önceki ödeme ({formatCurrency(order.totals.total)}) kayıtlı kalır. Masaya yeni
-                      ürün eklendiğinde sadece aradaki fark talep edilir.
-                    </div>
-                  </div>
-                </button>
-
-                {/* Option B: Cancel / Refund Payment */}
-                <button
-                  type="button"
-                  onClick={() => setPaymentAction('cancel')}
-                  className={`p-3 rounded-xl border text-left transition-all flex items-start gap-3 ${
-                    paymentAction === 'cancel'
-                      ? 'border-purple-600 bg-purple-50/70 dark:bg-purple-950/40 text-purple-900 dark:text-purple-200 ring-1 ring-purple-500'
-                      : 'border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300 hover:border-stone-300'
-                  }`}
-                >
-                  <div className="w-5 h-5 rounded-full border border-purple-500 flex items-center justify-center shrink-0 mt-0.5">
-                    {paymentAction === 'cancel' && (
-                      <div className="w-2.5 h-2.5 rounded-full bg-purple-600" />
-                    )}
-                  </div>
-                  <div>
-                    <div className="font-bold text-xs">
-                      (b) Ödemeyi İptal Et / İade Olarak İşle
-                    </div>
-                    <div className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5">
-                      Alınan ödeme kaydı silinir/iade edilir. Masa tamamen ödenmemiş (0 ₺ ödenmiş)
-                      olarak yeniden başlar.
-                    </div>
-                  </div>
-                </button>
-              </div>
+            {/* Sabit Bilgi Kutusu (seçenek değil, sadece bilgilendirme) */}
+            <div className="p-3.5 rounded-xl bg-purple-50/80 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800/80 flex items-start gap-2.5 text-purple-950 dark:text-purple-200">
+              <Info size={16} className="text-purple-600 dark:text-purple-400 shrink-0 mt-0.5" />
+              <p className="text-[11.5px] font-medium leading-relaxed">
+                {cancellationNoticeText}
+              </p>
             </div>
 
-            {/* Actions */}
+            {/* Vazgeç ve Adisyonu Geri Aç butonları */}
             <div className="flex gap-2.5 pt-2">
               <button
                 type="button"
@@ -241,7 +235,7 @@ export function ReopenOrderModal({
               </button>
               <button
                 type="button"
-                disabled={!isReasonValid}
+                disabled={!canProceed}
                 className="solid-action flex-1 bg-purple-700 hover:bg-purple-800 text-white disabled:opacity-40"
                 onClick={handleProceed}
               >
@@ -260,16 +254,14 @@ export function ReopenOrderModal({
                 Adisyonu Geri Açmayı Onaylıyor musunuz?
               </h3>
               <p className="text-xs text-stone-600 dark:text-stone-400 mt-1">
-                Adisyon #{order.orderNumber} ({formatCurrency(order.totals.total)}) masaya aktarılacak.
+                Adisyon #{order.orderNumber} ({formatCurrency(order.totals.total)}){' '}
+                <strong>{selectedTable?.name}</strong> masasına aktarılacak.
               </p>
-              <div className="mt-2 text-xs font-semibold text-purple-700 dark:text-purple-300">
-                Ödeme Planı:{' '}
-                {paymentAction === 'keep'
-                  ? 'Önceki ödeme korundu (üzerine eklenebilir)'
-                  : 'Ödeme sıfırlandı (yeniden tahsil edilecek)'}
+              <div className="mt-2.5 p-3 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-[11px] font-semibold text-purple-900 dark:text-purple-200 text-left">
+                {cancellationNoticeText}
               </div>
-              <div className="mt-1 text-[11px] text-stone-500">
-                Sebep: "{reason}"
+              <div className="mt-2 text-[11px] text-stone-500">
+                Sebep: &ldquo;{trimmedReason}&rdquo;
               </div>
             </div>
 
@@ -286,7 +278,7 @@ export function ReopenOrderModal({
                 className="solid-action flex-1 bg-purple-700 hover:bg-purple-800 text-white font-extrabold"
                 onClick={handleFinalSubmit}
               >
-                Evet, Adisyonu Aç
+                Evet, Adisyonu Geri Aç
               </button>
             </div>
           </div>

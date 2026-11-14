@@ -68,6 +68,8 @@ export interface Refund {
   unitPrice?: number
   amount: number
   paymentMethod?: PaymentMethod
+  /** Bu iadenin gerçekten kasadan/karttan/IBAN'dan tahsil edilmiş bir ödemenin geri ödemesi olup olmadığı */
+  paymentReceived?: boolean
   reason: string
   createdAt?: string
   createdBy?: string
@@ -149,6 +151,14 @@ export interface OrderTotals {
 }
 
 export type PaymentMethod = 'card' | 'cash' | 'iban' | 'mixed'
+export type ConcretePaymentMethod = 'card' | 'cash' | 'iban'
+
+export const PAYMENT_METHODS = {
+  CASH: 'cash' as const,
+  CARD: 'card' as const,
+  IBAN: 'iban' as const,
+  MIXED: 'mixed' as const,
+}
 
 export interface PaidOrderItem {
   lineId: string
@@ -156,20 +166,34 @@ export interface PaidOrderItem {
   amount: number
 }
 
+export type PaymentMovementType = 'ODEME' | 'IADE'
+export type PaymentMovementStatus = 'GECERLI' | 'IPTAL'
+
 export interface PartialPayment {
   id: string
-  method: 'card' | 'cash' | 'iban'
+  type?: PaymentMovementType
+  status?: PaymentMovementStatus
+  method: ConcretePaymentMethod
   amount: number
   receivedAmount?: number
   change?: number
   createdAt: string
   items?: PaidOrderItem[]
   businessDayId?: string
+  tableId?: string
+  tableName?: string
+  orderId?: string
   cashier?: string
   userId?: string
   isManualAmount?: boolean
   selectedItemsTotal?: number
+  cancelledReason?: string
+  cancelledBy?: string
+  cancelledAt?: string
+  reversalOfId?: string
 }
+
+export type PaymentMovement = PartialPayment
 
 export type TableStatus = 'empty' | 'occupied'
 
@@ -208,6 +232,10 @@ export interface CompletedOrder {
   reopenedAt?: string
   reopenReason?: string
   reopenedBy?: string
+  reopenedToTableId?: string
+  reopenedToTableName?: string
+  cancelledPaymentsTotal?: number
+  cancelledPaymentsSummary?: string
 }
 
 export interface SoldProductOptionBreakdown {
@@ -257,8 +285,22 @@ export interface BusinessDayReportSnapshot {
   totalRevenue: number
   /** Girilen ürünlerin (açık + kapalı masalar, iptaller hariç) brüt fiyat toplamı */
   grossItemsRevenue?: number
+  /** Kapanmış adisyonlardaki ürünlerin brüt fiyat toplamı */
+  closedTablesGrossRevenue?: number
+  /** Açık masalardaki ürünlerin brüt fiyat toplamı */
+  openTablesGrossRevenue?: number
+  /** Açık masalardaki ürünlerin indirim sonrası net adisyon toplamı */
+  openTablesNetTotal?: number
+  /** Açık masalarda henüz tahsil edilmemiş kalan bakiye toplamı */
+  openTablesUnpaidBalance?: number
+  /** Açık (dolu) masa sayısı */
+  openTablesCount?: number
+  /** Açık masalardaki toplam indirim tutarı */
+  openTablesDiscountTotal?: number
   /** Ödemesi tamamlanmış (kapanmış) masaların / adisyonların net tahsil edilen toplam tutarı */
   paidTablesTotal?: number
+  /** Tüm tahsilatların (kapalı masalar + açık masalardaki ara ödemeler, nakit/kart/IBAN iadeleri düşülmüş) net toplamı */
+  totalCollectedRevenue?: number
   orderCount: number
   /** @deprecated Rapor ekranından kaldırıldı; eski arşiv kayıtlarıyla uyumluluk için opsiyonel tutulur */
   averageBasket?: number
@@ -268,6 +310,12 @@ export interface BusinessDayReportSnapshot {
   cancelledTotal: number
   cancelledOrders: CancelledOrderSummary[]
   paymentDistribution: {
+    card: number
+    cash: number
+    iban: number
+  }
+  /** Sadece kapanmış masalara ait ödeme yöntemi dağılımı */
+  closedPaymentDistribution?: {
     card: number
     cash: number
     iban: number
@@ -287,6 +335,10 @@ export interface BusinessDayReportSnapshot {
   zDifference?: number
   totalRefunds?: number
   refundCount?: number
+  /** Ödemesi alınmış iadelerin toplamı (kasadan/karttan/IBAN'dan düşülen) */
+  paidRefundsTotal?: number
+  /** Henüz ödeme alınmadan yapılan mutfak/sipariş iadeleri toplamı */
+  unpaidRefundsTotal?: number
   // Legacy fields kept optional for backward compatibility
   posZCutoffTime?: string
   cardCarryIn?: number

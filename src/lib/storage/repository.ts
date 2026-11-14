@@ -33,12 +33,13 @@ import {
   getCompletedOrdersSqlite,
   getKvItemSqlite,
   getMenuProductsSqlite,
+  getMetaSqlite,
   getRefundsSqlite,
   getSettingsSqlite,
   getSqliteDatabaseStatus,
   getTablesSqlite,
   getUserPermissionOverridesSqlite,
-  getUsersSqlite,
+  getUsersSqliteWithStatus,
   invokeSqliteSync,
   isSqliteBackendActive,
   removeKvItemSqlite,
@@ -52,6 +53,7 @@ import {
   saveUserPermissionOverridesSqlite,
   saveUsersSqlite,
   setKvItemSqlite,
+  type UsersReadResult,
 } from './sqliteClient'
 
 export {
@@ -60,6 +62,7 @@ export {
   getArchivedActivityLogsSqlite,
   getMetaSqlite,
   setMetaSqlite,
+  type UsersReadResult,
 } from './sqliteClient'
 import {
   getMigrationFlagRecord,
@@ -99,6 +102,12 @@ function ensureSqliteReady(): void {
   }
 
   migrateLegacyKeys()
+
+  // SQLite schema_meta is authoritative across upgrades/cache resets:
+  // if SQLite already completed migration, never re-run destructive localStorage migration.
+  if (getMetaSqlite('migration_status') === 'completed') {
+    return
+  }
 
   const flag = getMigrationFlagRecord()
   const inProgress = (() => {
@@ -629,36 +638,118 @@ export function saveActivityLogsSafe(logs: ActivityLog[]): boolean {
 // Users Repository
 // ──────────────────────────────────────────────
 
-export function getUsersSafe(): User[] {
+function isActiveAdminRecord(u: User): boolean {
+  return Boolean(u && !u.isDeleted && u.status === 'active' && u.role === 'admin')
+}
+
+function mergeLegacyUsersIntoSqlite(existingSqliteUsers: User[], legacyUsers: User[]): User[] {
+  const merged = [...legacyUsers]
+  const seenIds = new Set(legacyUsers.map((u) => u.id))
+  const seenUsernames = new Set(
+    legacyUsers.filter((u) => !u.isDeleted).map((u) => u.username.toLowerCase()),
+  )
+  for (const u of existingSqliteUsers) {
+    if (seenIds.has(u.id)) continue
+    if (!u.isDeleted && seenUsernames.has(u.username.toLowerCase())) continue
+    merged.push(u)
+    seenIds.add(u.id)
+    if (!u.isDeleted) seenUsernames.add(u.username.toLowerCase())
+  }
+  return merged
+}
+
+export function getUsersWithStatus(): UsersReadResult {
   if (isSqliteBackendActive()) {
     ensureSqliteReady()
-    hydrateKeyFromLocalStorageIfNeeded<User[]>(
-      'appUsers',
-      (parsed) => validateUsers(parsed),
-      (data) => saveUsersSqlite(data),
-      () => {
-        const res = invokeSqliteSync<User[]>('getUsers')
-        return Boolean(res.success && Array.isArray(res.data) && res.data.length > 0)
-      },
-    )
-    return getUsersSqlite()
+
+    const sqliteRead = getUsersSqliteWithStatus()
+    if (sqliteRead.storageError) {
+      return sqliteRead
+    }
+
+    let users = sqliteRead.users
+
+    // If SQLite currently has no active admin, check legacy localStorage['appUsers']
+    // even if SQLite already holds auto-seeded waiter rows (Garson 1..4).
+    if (!users.some(isActiveAdminRecord)) {
+      let rawLegacy: string | null = null
+      try {
+        rawLegacy = localStorage.getItem('appUsers')
+      } catch {
+        rawLegacy = null
+      }
+
+      if (rawLegacy) {
+        try {
+          const parsed = JSON.parse(rawLegacy)
+          const validated = validateUsers(parsed)
+          if (validated && validated.some(isActiveAdminRecord)) {
+            const merged = mergeLegacyUsersIntoSqlite(users, validated)
+            if (!saveUsersSqlite(merged)) {
+              return {
+                users,
+                error: 'Kayıtlı yönetici hesabı SQLite veritabanına aktarılamadı.',
+                storageError: true,
+              }
+            }
+            const refreshed = getUsersSqliteWithStatus()
+            if (refreshed.storageError) return refreshed
+            users = refreshed.users
+          } else if (!validated) {
+            quarantineCorruptPayload('appUsers', rawLegacy, 'Invalid appUsers schema structure')
+          }
+        } catch (err) {
+          quarantineCorruptPayload(
+            'appUsers',
+            rawLegacy,
+            err instanceof Error ? err.message : 'JSON parse error',
+          )
+        }
+      }
+    }
+
+    // If SQLite DB was quarantined due to corruption on startup and no active admin remains,
+    // surface a storage error instead of silently falling back to initial admin setup.
+    if (!users.some(isActiveAdminRecord)) {
+      const dbStatus = getSqliteDatabaseStatus()
+      if (dbStatus?.corruptReplaced) {
+        return {
+          users,
+          error:
+            dbStatus.integrityMessage ||
+            'Veritabanı dosyasında bozulma tespit edildi ve karantinaya alındı. Mevcut yönetici hesabını kurtarmak için son otomatik yedekten geri yükleyin.',
+          storageError: true,
+        }
+      }
+    }
+
+    return { users, error: null, storageError: false }
   }
 
   const raw = safeGetItem('appUsers')
-  if (!raw) return []
+  if (!raw) return { users: [], error: null, storageError: false }
 
   try {
     const parsed = JSON.parse(raw)
     const validated = validateUsers(parsed)
-    if (validated) {
-      return validated
+    if (validated && (validated.length > 0 || (Array.isArray(parsed) && parsed.length === 0))) {
+      return { users: validated, error: null, storageError: false }
     }
+    const errMsg = 'Kayıtlı kullanıcı verisi geçersiz formatta; sıfırlama yapılmadı.'
     quarantineCorruptPayload('appUsers', raw, 'Invalid users structure')
-    return []
+    reportStorageError('appUsers', new Error(errMsg))
+    return { users: [], error: errMsg, storageError: true }
   } catch (err) {
-    quarantineCorruptPayload('appUsers', raw, err instanceof Error ? err.message : 'JSON parse error')
-    return []
+    const reason = err instanceof Error ? err.message : 'JSON parse error'
+    const errMsg = 'Kayıtlı kullanıcı verisi okunamadı (JSON hatası); mevcut kayıt korundu.'
+    quarantineCorruptPayload('appUsers', raw, reason)
+    reportStorageError('appUsers', err)
+    return { users: [], error: errMsg, storageError: true }
   }
+}
+
+export function getUsersSafe(): User[] {
+  return getUsersWithStatus().users
 }
 
 export function saveUsersSafe(users: User[]): boolean {

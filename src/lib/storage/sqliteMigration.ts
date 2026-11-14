@@ -388,7 +388,8 @@ export function runLocalStorageToSqliteMigration(options?: {
     }
   }
 
-  // Check if a previous migration was completed or interrupted
+  // Check if a previous migration was completed or interrupted.
+  // SQLite schema_meta ('migration_status') is the authoritative source of truth across upgrades/cache resets.
   const flag = getMigrationFlagRecord()
   const inProgressMarker = localStorage.getItem(MIGRATION_IN_PROGRESS_KEY)
   const dbMigrationStatusRes = invokeSqliteSync<string | null>('getMeta', {
@@ -396,22 +397,67 @@ export function runLocalStorageToSqliteMigration(options?: {
   })
   const dbMigrationStatus = dbMigrationStatusRes.success ? dbMigrationStatusRes.data : null
 
-  const wasInterrupted =
-    Boolean(inProgressMarker) ||
-    dbMigrationStatus === 'in_progress' ||
-    (Boolean(flag?.migrated) && dbMigrationStatus !== 'completed')
+  const sqliteUsersRes = invokeSqliteSync<User[]>('getUsers')
+  const sqliteHasActiveAdmin = Boolean(
+    sqliteUsersRes.success &&
+      Array.isArray(sqliteUsersRes.data) &&
+      sqliteUsersRes.data.some((u) => !u.isDeleted && u.status === 'active' && u.role === 'admin'),
+  )
 
-  if (!options?.force && flag?.migrated && dbMigrationStatus === 'completed' && !inProgressMarker) {
+  if (!options?.force && (dbMigrationStatus === 'completed' || (dbMigrationStatus !== 'in_progress' && sqliteHasActiveAdmin))) {
+    const dbMigratedAtRes = invokeSqliteSync<string | null>('getMeta', { key: 'migrated_at' })
+    const dbRetainUntilRes = invokeSqliteSync<string | null>('getMeta', { key: 'legacy_retain_until' })
+    const now = new Date()
+    const migratedAt =
+      flag?.migratedAt ||
+      (dbMigratedAtRes.success && dbMigratedAtRes.data) ||
+      now.toISOString()
+    const retainUntil =
+      flag?.retainUntil ||
+      (dbRetainUntilRes.success && dbRetainUntilRes.data) ||
+      new Date(now.getTime() + LEGACY_RETENTION_MS).toISOString()
+
+    if (dbMigrationStatus !== 'completed') {
+      invokeSqliteSync('setMeta', { key: 'migration_status', value: 'completed' })
+      invokeSqliteSync('setMeta', { key: 'migrated_at', value: migratedAt })
+      invokeSqliteSync('setMeta', { key: 'legacy_retain_until', value: retainUntil })
+    }
+
+    if (!flag?.migrated) {
+      try {
+        localStorage.setItem(
+          MIGRATED_TO_SQLITE_KEY,
+          JSON.stringify({
+            migrated: true,
+            migratedAt,
+            retainUntil,
+            retentionDays: LEGACY_RETENTION_DAYS,
+            schemaVersion: 1,
+          } satisfies MigrationFlagRecord),
+        )
+      } catch {}
+    }
+    if (inProgressMarker) {
+      try {
+        localStorage.removeItem(MIGRATION_IN_PROGRESS_KEY)
+      } catch {}
+    }
+
     return {
       success: true,
       skipped: true,
       alreadyMigrated: true,
       recoveredFromInterruption: false,
       quarantinedKeys: [],
-      migratedAt: flag.migratedAt,
-      retainUntil: flag.retainUntil,
+      migratedAt,
+      retainUntil,
     }
   }
+
+  const wasInterrupted =
+    Boolean(inProgressMarker) ||
+    dbMigrationStatus === 'in_progress' ||
+    (Boolean(flag?.migrated) && dbMigrationStatus !== 'completed')
 
   // Step 1: Extract and validate legacy localStorage data (quarantining corrupt entries without stopping)
   const { payload: extractedPayload, quarantinedKeys } = extractAndValidateLocalStorageData()
@@ -426,7 +472,7 @@ export function runLocalStorageToSqliteMigration(options?: {
   const preMigrationBackup: POSBackupFile = {
     formatVersion: BACKUP_FORMAT_VERSION,
     schemaVersion: CURRENT_STORAGE_SCHEMA_VERSION,
-    appVersion: '1.7.0',
+    appVersion: '1.8.0',
     createdAt: new Date().toISOString(),
     checksum: computeChecksum(payloadJson),
     description: 'SQLite veri aktarımı öncesi otomatik tam yedek',
@@ -472,6 +518,7 @@ export function runLocalStorageToSqliteMigration(options?: {
   const migrateRes = invokeSqliteSync('migrateFromLocalStorage', {
     data: cleanPayload,
     options: {
+      force: options?.force,
       failAtStep: options?.failAtStep,
       tamperAfterWrite: options?.tamperAfterWrite,
     },

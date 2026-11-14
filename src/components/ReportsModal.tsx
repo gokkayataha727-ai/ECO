@@ -38,6 +38,7 @@ import {
   getIstanbulParts,
   getReportForBusinessDay,
   getStoredRefunds,
+  isPaidRefund,
 } from '../lib/businessDay'
 import { formatCurrency, roundCurrency, getEffectivePrice } from '../lib/format'
 import { getAllUsers } from '../lib/auth'
@@ -311,7 +312,7 @@ export function ReportsModal({
   }
 
   const receiptsData = useMemo(() => {
-    const validOrders = filteredOrders.filter((o) => !o.cancelled)
+    const validOrders = filteredOrders.filter((o) => !o.cancelled && !o.reopened)
     const formatted = validOrders
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .map((o) => ({
@@ -356,10 +357,41 @@ export function ReportsModal({
 
     // Filter relevant refunds for this business day / period
     const relevantRefunds = allRefunds.filter((r) => {
-      if (selectedBusinessDay) {
-        return r.businessDayId === selectedBusinessDay.id
+      if (filterMode === 'day') {
+        if (selectedDayId === LEGACY_DAY_ID) return !r.businessDayId
+        if (selectedBusinessDay) return r.businessDayId === selectedBusinessDay.id
+        return false
       }
-      return true
+      const refTime = r.refundedAt || r.createdAt
+      if (!refTime) return false
+      const d = new Date(refTime)
+      if (Number.isNaN(d.getTime())) return false
+      const now = new Date()
+      const todayParts = getIstanbulParts(now)
+      const todayNoon = createIstanbulDate(todayParts.year, todayParts.month, todayParts.day, 12, 0, 0)
+      const todayStart = createIstanbulDate(todayParts.year, todayParts.month, todayParts.day, 0, 0, 0)
+      const todayEnd = new Date(
+        createIstanbulDate(todayParts.year, todayParts.month, todayParts.day, 23, 59, 59).getTime() + 999,
+      )
+      if (filterMode === 'today') return d >= todayStart && d <= todayEnd
+      if (filterMode === 'yesterday') {
+        const yestParts = getIstanbulParts(new Date(todayNoon.getTime() - 86400000))
+        const start = createIstanbulDate(yestParts.year, yestParts.month, yestParts.day, 0, 0, 0)
+        const end = new Date(
+          createIstanbulDate(yestParts.year, yestParts.month, yestParts.day, 23, 59, 59).getTime() + 999,
+        )
+        return d >= start && d <= end
+      }
+      if (filterMode === 'last7') {
+        const startParts = getIstanbulParts(new Date(todayNoon.getTime() - 6 * 86400000))
+        const start = createIstanbulDate(startParts.year, startParts.month, startParts.day, 0, 0, 0)
+        return d >= start && d <= todayEnd
+      }
+      const startBounds = customStart ? getIstanbulDayBounds(customStart) : null
+      const endBounds = customEnd ? getIstanbulDayBounds(customEnd) : null
+      const start = startBounds ? startBounds.start : new Date(todayStart.getTime() - 7 * 86400000)
+      const end = endBounds ? endBounds.end : todayEnd
+      return d >= start && d <= end
     })
 
     const map = new Map<
@@ -373,6 +405,7 @@ export function ReportsModal({
         paymentAmount: number
         refundCount: number
         refundAmount: number
+        paidRefundAmount: number
       }
     >()
 
@@ -389,10 +422,11 @@ export function ReportsModal({
           paymentAmount: 0,
           refundCount: 0,
           refundAmount: 0,
+          paidRefundAmount: 0,
         })
       })
 
-    const validOrders = filteredOrders.filter((o) => !o.cancelled)
+    const validOrders = filteredOrders.filter((o) => !o.cancelled && !o.reopened)
 
     for (const order of validOrders) {
       // Kalem bazlı satışlar
@@ -409,6 +443,7 @@ export function ReportsModal({
             paymentAmount: 0,
             refundCount: 0,
             refundAmount: 0,
+            paidRefundAmount: 0,
           })
         }
         const stat = map.get(waiterName)!
@@ -431,6 +466,7 @@ export function ReportsModal({
               paymentAmount: 0,
               refundCount: 0,
               refundAmount: 0,
+              paidRefundAmount: 0,
             })
           }
           const stat = map.get(cashierName)!
@@ -449,6 +485,7 @@ export function ReportsModal({
             paymentAmount: 0,
             refundCount: 0,
             refundAmount: 0,
+            paidRefundAmount: 0,
           })
         }
         const stat = map.get(cashierName)!
@@ -470,11 +507,15 @@ export function ReportsModal({
           paymentAmount: 0,
           refundCount: 0,
           refundAmount: 0,
+          paidRefundAmount: 0,
         })
       }
       const stat = map.get(user)!
       stat.refundCount += 1
       stat.refundAmount = roundCurrency(stat.refundAmount + r.amount)
+      if (isPaidRefund(r)) {
+        stat.paidRefundAmount = roundCurrency(stat.paidRefundAmount + r.amount)
+      }
     }
 
     const result = Array.from(map.values()).sort(
@@ -490,7 +531,17 @@ export function ReportsModal({
     }
 
     return result
-  }, [filteredOrders, selectedBusinessDay, canViewGeneral, canViewOwn, currentSession])
+  }, [
+    filteredOrders,
+    filterMode,
+    selectedDayId,
+    selectedBusinessDay,
+    customStart,
+    customEnd,
+    canViewGeneral,
+    canViewOwn,
+    currentSession,
+  ])
 
   if (!isOpen) return null
 
@@ -912,11 +963,16 @@ export function ReportsModal({
 
                     {/* Kasa Özeti */}
                     {(() => {
+                      const openTableCash =
+                        selectedBusinessDay.status === 'open'
+                          ? (activeReport.openTablePaymentsByMethod?.cash || 0)
+                          : 0
                       const expected =
                         selectedBusinessDay.expectedCash ??
                         roundCurrency(
                           selectedBusinessDay.openingCash +
-                            activeReport.paymentDistribution.cash,
+                            activeReport.paymentDistribution.cash +
+                            openTableCash,
                         )
                       const counted = selectedBusinessDay.countedCash
                       const diff =
@@ -969,6 +1025,11 @@ export function ReportsModal({
                                   activeReport.paymentDistribution.cash,
                                 )}
                               </strong>
+                              {openTableCash > 0 && (
+                                <span className="text-[10px] font-bold text-amber-700 block">
+                                  +{formatCurrency(openTableCash)} açık masa
+                                </span>
+                              )}
                             </div>
                             <div className="p-2 rounded-lg bg-white border border-[#ebe2d9]">
                               <span className="text-[10px] text-[#8c7a6e] font-bold block">
@@ -994,7 +1055,7 @@ export function ReportsModal({
                             activeReport.openTablePaymentsTotal > 0 && (
                               <div className="mt-2 pt-2 border-t border-[#ebe2d9] flex items-center justify-between text-[11px] font-bold text-amber-800">
                                 <span>
-                                  Açık masalarda alınan ödemeler:
+                                  Açık masalarda alınan ara ödemeler:
                                 </span>
                                 <strong>
                                   {formatCurrency(
@@ -1009,10 +1070,14 @@ export function ReportsModal({
 
                     {/* POS Z Raporu Özeti */}
                     {(() => {
+                      const openTableCard =
+                        selectedBusinessDay.status === 'open'
+                          ? (activeReport.openTablePaymentsByMethod?.card || 0)
+                          : 0
                       const expectedZ =
                         activeReport.expectedZ ??
                         selectedBusinessDay.expectedZ ??
-                        activeReport.paymentDistribution.card
+                        roundCurrency(activeReport.paymentDistribution.card + openTableCard)
                       const enteredZ =
                         activeReport.enteredZ ?? selectedBusinessDay.enteredZ
                       const zDiff =
@@ -1060,6 +1125,11 @@ export function ReportsModal({
                               <strong className="font-extrabold text-[#3b291f]">
                                 {formatCurrency(activeReport.paymentDistribution.card)}
                               </strong>
+                              {openTableCard > 0 && (
+                                <span className="text-[10px] font-bold text-indigo-700 block">
+                                  +{formatCurrency(openTableCard)} açık masa
+                                </span>
+                              )}
                             </div>
                             <div className="p-2 rounded-lg bg-white border border-[#ebe2d9]">
                               <span className="text-[10px] text-[#8c7a6e] font-bold block">
@@ -1101,6 +1171,11 @@ export function ReportsModal({
                   <div className="text-2xl font-black text-[#2d1e15] mt-0.5">
                     {formatCurrency(activeReport.grossItemsRevenue ?? activeReport.totalRevenue)}
                   </div>
+                  {(activeReport.openTablesGrossRevenue || 0) > 0 && (
+                    <div className="text-[11px] font-bold text-amber-800 mt-1">
+                      Açık masa: {formatCurrency(activeReport.openTablesGrossRevenue || 0)}
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-white rounded-2xl p-4 border border-[#e6ddd4] shadow-xs">
@@ -1113,6 +1188,11 @@ export function ReportsModal({
                   <div className="text-2xl font-black text-[#2d1e15] mt-0.5">
                     {activeReport.orderCount}
                   </div>
+                  {(activeReport.openTablesCount || 0) > 0 && (
+                    <div className="text-[11px] font-bold text-[#8c7a6e] mt-1">
+                      +{activeReport.openTablesCount} açık masa
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-white rounded-2xl p-4 border border-[#e6ddd4] shadow-xs">
@@ -1125,6 +1205,11 @@ export function ReportsModal({
                   <div className="text-2xl font-black text-[#2d1e15] mt-0.5">
                     {formatCurrency(activeReport.paidTablesTotal ?? activeReport.totalRevenue)}
                   </div>
+                  {(activeReport.openTablePaymentsTotal || 0) > 0 && (
+                    <div className="text-[11px] font-bold text-teal-700 mt-1">
+                      +{formatCurrency(activeReport.openTablePaymentsTotal || 0)} ara ödeme
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-white rounded-2xl p-4 border border-[#e6ddd4] shadow-xs">
@@ -1164,6 +1249,116 @@ export function ReportsModal({
                 </div>
               </div>
 
+              {/* Ciro vs Tahsilat Mutabakat Açıklaması */}
+              {(() => {
+                const grossCiro = roundCurrency(
+                  activeReport.grossItemsRevenue ?? activeReport.totalRevenue,
+                )
+                const paidTotal = roundCurrency(
+                  activeReport.paidTablesTotal ?? activeReport.totalRevenue,
+                )
+                const openGross = roundCurrency(activeReport.openTablesGrossRevenue || 0)
+                const openUnpaid = roundCurrency(activeReport.openTablesUnpaidBalance || 0)
+                const openPartial = roundCurrency(activeReport.openTablePaymentsTotal || 0)
+                const closedGross = roundCurrency(
+                  activeReport.closedTablesGrossRevenue ?? Math.max(0, grossCiro - openGross),
+                )
+                const discountTotal = roundCurrency(activeReport.totalDiscount || 0)
+                const paidRefunds = roundCurrency(activeReport.paidRefundsTotal || 0)
+                const unpaidRefunds = roundCurrency(activeReport.unpaidRefundsTotal || 0)
+                const hasDifference =
+                  Math.abs(grossCiro - paidTotal) > 0.005 ||
+                  openGross > 0 ||
+                  openPartial > 0 ||
+                  discountTotal > 0 ||
+                  paidRefunds > 0 ||
+                  unpaidRefunds > 0
+
+                if (!hasDifference) return null
+
+                return (
+                  <div className="bg-[#fcfaf7] rounded-2xl p-4 border border-[#e6ddd4] shadow-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+                      <span className="text-xs font-black text-[#3b291f] uppercase tracking-wider flex items-center gap-1.5">
+                        <AlertCircle size={14} className="text-[#8a6d57]" />
+                        Ciro & Tahsilat Mutabakat Özeti
+                      </span>
+                      <span className="text-[11px] font-semibold text-[#6d5a4e]">
+                        Toplam Ciro ({formatCurrency(grossCiro)}) ile Ödenen Masalar Toplamı ({formatCurrency(paidTotal)}) kırılımı
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
+                      <div className="p-2.5 rounded-xl bg-white border border-[#ebe2d9]">
+                        <span className="text-[10px] font-bold text-[#8c7a6e] block">
+                          Kapanan Masalar (Brüt)
+                        </span>
+                        <strong className="font-extrabold text-[#2d1e15]">
+                          {formatCurrency(closedGross)}
+                        </strong>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-white border border-[#ebe2d9]">
+                        <span className="text-[10px] font-bold text-[#8c7a6e] block">
+                          Açık Masalar (Brüt)
+                        </span>
+                        <strong className="font-extrabold text-amber-800">
+                          {formatCurrency(openGross)}
+                        </strong>
+                        {openUnpaid > 0 && (
+                          <span className="text-[10px] font-semibold text-amber-700 block">
+                            Tahsil edilmemiş: {formatCurrency(openUnpaid)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-white border border-[#ebe2d9]">
+                        <span className="text-[10px] font-bold text-[#8c7a6e] block">
+                          Uygulanan İndirimler
+                        </span>
+                        <strong className="font-extrabold text-purple-700">
+                          {discountTotal > 0 ? `-${formatCurrency(discountTotal)}` : formatCurrency(0)}
+                        </strong>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-white border border-[#ebe2d9]">
+                        <span className="text-[10px] font-bold text-[#8c7a6e] block">
+                          Ödeme İadeleri (Nakit/Kart)
+                        </span>
+                        <strong className="font-extrabold text-rose-700">
+                          {paidRefunds > 0 ? `-${formatCurrency(paidRefunds)}` : formatCurrency(0)}
+                        </strong>
+                        {unpaidRefunds > 0 && (
+                          <span className="text-[10px] font-semibold text-stone-500 block">
+                            Ödeme öncesi iptal: {formatCurrency(unpaidRefunds)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-white border border-[#ebe2d9]">
+                        <span className="text-[10px] font-bold text-[#8c7a6e] block">
+                          Ödenen Masalar (Net)
+                        </span>
+                        <strong className="font-extrabold text-emerald-700">
+                          {formatCurrency(paidTotal)}
+                        </strong>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-white border border-[#ebe2d9]">
+                        <span className="text-[10px] font-bold text-[#8c7a6e] block">
+                          Toplam Kasaya Giren
+                        </span>
+                        <strong className="font-extrabold text-indigo-700">
+                          {formatCurrency(
+                            activeReport.totalCollectedRevenue ??
+                              roundCurrency(paidTotal + openPartial),
+                          )}
+                        </strong>
+                        {openPartial > 0 && (
+                          <span className="text-[10px] font-semibold text-teal-700 block">
+                            +{formatCurrency(openPartial)} açık masa ara ödeme
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })()}
+
               {/* Payment Method Distribution + Category Sales */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 {/* Ödeme Yöntemlerine Göre Dağılım */}
@@ -1176,6 +1371,20 @@ export function ReportsModal({
                       <p className="text-xs font-semibold text-[#6d5a4e]">
                         Adisyonlara uygulanan net tahsilat tutarları
                       </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] font-bold text-[#8c7a6e] uppercase block">
+                        Toplam Tahsilat
+                      </span>
+                      <strong className="text-sm font-black text-[#2d1e15]">
+                        {formatCurrency(
+                          roundCurrency(
+                            activeReport.paymentDistribution.card +
+                              activeReport.paymentDistribution.cash +
+                              activeReport.paymentDistribution.iban,
+                          ),
+                        )}
+                      </strong>
                     </div>
                   </div>
 
@@ -1220,6 +1429,20 @@ export function ReportsModal({
                       )
                     })}
                   </div>
+
+                  {(activeReport.openTablePaymentsTotal || 0) > 0 && (
+                    <div className="mt-4 pt-3 border-t border-[#f0e8e0] text-xs space-y-1">
+                      <div className="flex items-center justify-between font-bold text-amber-900">
+                        <span>Açık Masalarda Alınan Ara Ödemeler:</span>
+                        <strong>{formatCurrency(activeReport.openTablePaymentsTotal || 0)}</strong>
+                      </div>
+                      <div className="flex flex-wrap gap-3 text-[11px] font-semibold text-[#6d5a4e]">
+                        <span>Nakit: {formatCurrency(activeReport.openTablePaymentsByMethod?.cash || 0)}</span>
+                        <span>Kart: {formatCurrency(activeReport.openTablePaymentsByMethod?.card || 0)}</span>
+                        <span>IBAN: {formatCurrency(activeReport.openTablePaymentsByMethod?.iban || 0)}</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Kategori Bazlı Satış */}
@@ -1521,7 +1744,7 @@ export function ReportsModal({
                       </thead>
                       <tbody className="divide-y divide-[#f2ece6]">
                         {waiterSummaryData.map((row) => {
-                          const netCollected = roundCurrency(row.paymentAmount - row.refundAmount)
+                          const netCollected = Math.max(0, roundCurrency(row.paymentAmount - row.paidRefundAmount))
                           return (
                             <tr key={row.fullName} className="hover:bg-[#fcfaf7]/70 transition-colors">
                               <td className="py-3 px-4 font-bold text-[#3b291f]">
@@ -1681,93 +1904,6 @@ export function ReportsModal({
                 )}
               </div>
 
-              {/* Garson / Personel Satış ve Performans Özeti */}
-              <div className="bg-white rounded-2xl p-5 border border-[#e6ddd4] shadow-xs">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="text-base font-extrabold text-[#3b291f] flex items-center gap-2">
-                      <Users size={17} className="text-[#8a6d57]" />
-                      Garson & Personel Satış Özeti
-                    </h3>
-                    <p className="text-xs text-[#8c7a6e]">
-                      Seçilen iş gününde personellerin eklediği siparişler, tahsil ettiği ödemeler ve iadeler
-                    </p>
-                  </div>
-                </div>
-
-                {waiterSummaryData.length === 0 ? (
-                  <p className="text-xs text-[#8c7a6e] font-medium py-3 text-center">
-                    Bu dönemde henüz personel işlem kaydı bulunmuyor.
-                  </p>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse text-xs">
-                      <thead>
-                        <tr className="bg-[#fcfaf7] border-b border-[#ebe2d9] text-[11px] font-extrabold text-[#8a6d57] uppercase tracking-wider">
-                          <th className="py-3 px-4">Personel</th>
-                          <th className="py-3 px-4">Rol</th>
-                          <th className="py-3 px-4 text-right">Eklenen Ürün (Adet)</th>
-                          <th className="py-3 px-4 text-right">Toplam Satış</th>
-                          <th className="py-3 px-4 text-right">Tahsil Edilen Ödeme</th>
-                          <th className="py-3 px-4 text-right">Yapılan İade</th>
-                          <th className="py-3 px-4 text-right">Net Tahsilat</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-[#f2ece6]">
-                        {waiterSummaryData.map((row) => {
-                          const netCollected = roundCurrency(row.paymentAmount - row.refundAmount)
-                          return (
-                            <tr key={row.fullName} className="hover:bg-[#fcfaf7]/70 transition-colors">
-                              <td className="py-3 px-4 font-bold text-[#3b291f]">
-                                {row.fullName}
-                              </td>
-                              <td className="py-3 px-4">
-                                <span
-                                  className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                    row.role === 'Garson'
-                                      ? 'bg-amber-100 text-amber-800'
-                                      : 'bg-stone-100 text-stone-700'
-                                  }`}
-                                >
-                                  {row.role}
-                                </span>
-                              </td>
-                              <td className="py-3 px-4 text-right font-medium text-stone-600">
-                                {row.itemCount} adet
-                              </td>
-                              <td className="py-3 px-4 text-right font-bold text-[#3b291f]">
-                                {formatCurrency(row.totalSalesRevenue)}
-                              </td>
-                              <td className="py-3 px-4 text-right font-bold text-teal-700">
-                                {formatCurrency(row.paymentAmount)}{' '}
-                                <span className="text-[10px] text-stone-400 font-normal">
-                                  ({row.paymentCount})
-                                </span>
-                              </td>
-                              <td className="py-3 px-4 text-right font-bold text-rose-600">
-                                {row.refundAmount > 0 ? (
-                                  <>
-                                    -{formatCurrency(row.refundAmount)}{' '}
-                                    <span className="text-[10px] text-rose-400 font-normal">
-                                      ({row.refundCount})
-                                    </span>
-                                  </>
-                                ) : (
-                                  '0,00 ₺'
-                                )}
-                              </td>
-                              <td className="py-3 px-4 text-right font-black text-amber-900">
-                                {formatCurrency(netCollected)}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-
               {/* Fiş Geçmişi (Individual Completed Orders) */}
               {receiptsData.total > 0 && (
                 <ReceiptsTable
@@ -1775,6 +1911,7 @@ export function ReportsModal({
                   isLoading={false}
                   onPageChange={setReceiptPage}
                   onReopenOrder={canReopen ? onReopenOrder : undefined}
+                  openBusinessDayId={openBusinessDay?.id || ''}
                 />
               )}
             </div>

@@ -337,12 +337,24 @@ export function setMetaSqlite(key: string, value: string): boolean {
   return res.success
 }
 
-export function getUsersSqlite(): User[] {
+export interface UsersReadResult {
+  users: User[]
+  error: string | null
+  storageError: boolean
+}
+
+export function getUsersSqliteWithStatus(): UsersReadResult {
   const res = invokeSqliteSync<User[]>('getUsers')
   if (res.success && Array.isArray(res.data)) {
-    return res.data
+    return { users: res.data, error: null, storageError: false }
   }
-  return []
+  const errMsg = res.error || 'Kullanıcı verileri SQLite veritabanından okunamadı.'
+  emitCriticalStorageError('appUsers', errMsg)
+  return { users: [], error: errMsg, storageError: true }
+}
+
+export function getUsersSqlite(): User[] {
+  return getUsersSqliteWithStatus().users
 }
 
 export function saveUsersSqlite(users: User[]): boolean {
@@ -442,6 +454,10 @@ export function executeReopenOrderSqliteTx(params: {
   reopenedAt: string
   reopenedBy: string
   reopenReason: string
+  reopenedToTableId?: string
+  reopenedToTableName?: string
+  cancelledPaymentsTotal?: number
+  cancelledPaymentsSummary?: string
   updatedTables: Table[]
   activityLog?: ActivityLog
   options?: { failAtStep?: string }

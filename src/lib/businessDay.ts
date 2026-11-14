@@ -12,7 +12,34 @@ import type {
   SoldProductReportItem,
   Table,
 } from '../types'
-import { formatCurrency, getEffectivePrice, getLineAfterItemDiscount, isTableOccupied, roundCurrency } from './format'
+import {
+  calculateTotals,
+  formatCurrency,
+  fromKurus,
+  getEffectivePrice,
+  getLineAfterItemDiscount,
+  isTableOccupied,
+  isValidPaymentMovement,
+  normalizePaymentMethod,
+  roundCurrency,
+  toKurus,
+} from './format'
+
+export {
+  executeOrderReopen,
+  formatReopenCancellationNotice,
+  getOrderPaymentBreakdownSummary,
+  healCorruptedReopenedData,
+} from './reopenOrder'
+export type {
+  ExecuteOrderReopenFailure,
+  ExecuteOrderReopenInput,
+  ExecuteOrderReopenResult,
+  ExecuteOrderReopenSuccess,
+  HealReopenedDataResult,
+  OrderPaymentBreakdownSummary,
+  PaymentMethodBreakdownEntry,
+} from './reopenOrder'
 
 import { getRefundsSafe, saveRefundsSafe } from './storage'
 
@@ -202,29 +229,64 @@ export const formatOptionsLabel = (options?: SelectedOption[]): string => {
 export const getOrderAppliedPayments = (
   order: CompletedOrder,
 ): { card: number; cash: number; iban: number; total: number } => {
-  if (order.payments && order.payments.length > 0) {
-    let card = 0
-    let cash = 0
-    let iban = 0
-    for (const p of order.payments) {
-      const amt = roundCurrency(p.amount)
-      if (p.method === 'card') card = roundCurrency(card + amt)
-      else if (p.method === 'iban') iban = roundCurrency(iban + amt)
-      else cash = roundCurrency(cash + amt) // default to cash for unknown/missing
-    }
-    const total = roundCurrency(card + cash + iban)
-    return { card, cash, iban, total }
+  if (order.cancelled || order.reopened) {
+    return { card: 0, cash: 0, iban: 0, total: 0 }
   }
 
-  const fallbackTotal = roundCurrency(order.totals?.total ?? 0)
-  if (order.paymentMethod === 'card') {
+  if (order.payments && order.payments.length > 0) {
+    let cardKurus = 0
+    let cashKurus = 0
+    let ibanKurus = 0
+    for (const p of order.payments) {
+      if (!isValidPaymentMovement(p)) continue
+      const amtKurus = Math.max(0, toKurus(p.amount))
+      const method = normalizePaymentMethod(p.method, 'cash')
+      if (p.type === 'IADE') {
+        if (method === 'card') cardKurus = Math.max(0, cardKurus - amtKurus)
+        else if (method === 'iban') ibanKurus = Math.max(0, ibanKurus - amtKurus)
+        else cashKurus = Math.max(0, cashKurus - amtKurus)
+      } else {
+        if (method === 'card') cardKurus += amtKurus
+        else if (method === 'iban') ibanKurus += amtKurus
+        else cashKurus += amtKurus
+      }
+    }
+    const totalKurus = cardKurus + cashKurus + ibanKurus
+    return {
+      card: fromKurus(cardKurus),
+      cash: fromKurus(cashKurus),
+      iban: fromKurus(ibanKurus),
+      total: fromKurus(totalKurus),
+    }
+  }
+
+  const fallbackTotalKurus = Math.max(0, toKurus(order.totals?.total ?? 0))
+  const fallbackTotal = fromKurus(fallbackTotalKurus)
+  const method = normalizePaymentMethod(order.paymentMethod, 'cash')
+  if (method === 'card') {
     return { card: fallbackTotal, cash: 0, iban: 0, total: fallbackTotal }
   }
-  if (order.paymentMethod === 'iban') {
+  if (method === 'iban') {
     return { card: 0, cash: 0, iban: fallbackTotal, total: fallbackTotal }
   }
   // Default to cash for backward compatibility
   return { card: 0, cash: fallbackTotal, iban: 0, total: fallbackTotal }
+}
+
+/**
+ * Determines whether a refund record represents an actual reversal of received money
+ * (from cash drawer, POS terminal, or IBAN) rather than an unpaid kitchen/cart item cancellation.
+ */
+export const isPaidRefund = (refund: Refund): boolean => {
+  if (refund.paymentReceived === false) return false
+  if (refund.paymentReceived === true) return true
+  // Legacy open-table refunds (created before paymentReceived flag existed) have tableId set and no orderId.
+  // Their items were already marked 'refunded' in the open table's cart (or the open table was cleared)
+  // before any CompletedOrder was created, so deducting them from CompletedOrder revenue would double-deduct.
+  if (!refund.orderId && Boolean(refund.tableId)) {
+    return false
+  }
+  return Boolean(refund.paymentMethod && String(refund.paymentMethod).trim().length > 0)
 }
 
 /**
@@ -237,20 +299,27 @@ export const calculateDayCardBreakdown = (
   orders: CompletedOrder[],
   tables?: Table[],
   _fallbackCutoffTime = '23:57',
+  passedRefunds?: Refund[],
 ): DayCardBreakdown => {
-  let totalCard = 0
+  let totalCardKurus = 0
 
   const dayOrders = orders.filter((o) => o.businessDayId === day.id && !o.cancelled && !o.reopened)
 
   for (const o of dayOrders) {
     if (o.payments && o.payments.length > 0) {
       for (const p of o.payments) {
-        if (p.method === 'card') {
-          totalCard = roundCurrency(totalCard + p.amount)
+        if (!isValidPaymentMovement(p)) continue
+        if (normalizePaymentMethod(p.method, 'cash') === 'card') {
+          const amtKurus = Math.max(0, toKurus(p.amount))
+          if (p.type === 'IADE') {
+            totalCardKurus = Math.max(0, totalCardKurus - amtKurus)
+          } else {
+            totalCardKurus += amtKurus
+          }
         }
       }
-    } else if (o.paymentMethod === 'card') {
-      totalCard = roundCurrency(totalCard + (o.totals?.total ?? 0))
+    } else if (normalizePaymentMethod(o.paymentMethod, 'cash') === 'card') {
+      totalCardKurus += Math.max(0, toKurus(o.totals?.total ?? 0))
     }
   }
 
@@ -258,22 +327,30 @@ export const calculateDayCardBreakdown = (
     for (const t of tables) {
       if (!isTableOccupied(t) || !t.payments || t.payments.length === 0) continue
       for (const p of t.payments) {
+        if (!isValidPaymentMovement(p)) continue
         if (p.businessDayId && p.businessDayId !== day.id) continue
-        if (p.method === 'card') {
-          totalCard = roundCurrency(totalCard + p.amount)
+        if (normalizePaymentMethod(p.method, 'cash') === 'card') {
+          const amtKurus = Math.max(0, toKurus(p.amount))
+          if (p.type === 'IADE') {
+            totalCardKurus = Math.max(0, totalCardKurus - amtKurus)
+          } else {
+            totalCardKurus += amtKurus
+          }
         }
       }
     }
   }
 
-  // Deduct card refunds for this business day
-  const storedRefunds = getStoredRefunds().filter((r) => r.businessDayId === day.id)
+  // Deduct paid card refunds for this business day
+  const storedRefunds = (passedRefunds ?? getStoredRefunds()).filter((r) => r.businessDayId === day.id)
   for (const r of storedRefunds) {
-    if (r.paymentMethod === 'card') {
-      totalCard = Math.max(0, roundCurrency(totalCard - r.amount))
+    if (!isPaidRefund(r)) continue
+    if (normalizePaymentMethod(r.paymentMethod, 'cash') === 'card') {
+      totalCardKurus = Math.max(0, totalCardKurus - Math.max(0, toKurus(r.amount)))
     }
   }
 
+  const totalCard = fromKurus(totalCardKurus)
   const expectedZ = totalCard
   let enteredZ: number | undefined
   let zDifference: number | undefined
@@ -339,29 +416,48 @@ export const getOrderItemNetRevenues = (items: CartItem[], orderNetRevenue: numb
 export const computeOpenTablesPartialPayments = (
   tables: Table[],
   openBusinessDayId?: string,
+  dateRange?: { start: Date; end: Date },
 ): {
   total: number
   byMethod: { card: number; cash: number; iban: number }
 } => {
-  let card = 0
-  let cash = 0
-  let iban = 0
+  let cardKurus = 0
+  let cashKurus = 0
+  let ibanKurus = 0
 
   for (const t of tables) {
     if (!isTableOccupied(t) || !t.payments || t.payments.length === 0) continue
     for (const p of t.payments) {
+      if (!isValidPaymentMovement(p)) continue
       if (openBusinessDayId && p.businessDayId && p.businessDayId !== openBusinessDayId) {
         continue
       }
-      const amt = roundCurrency(p.amount)
-      if (p.method === 'cash') cash = roundCurrency(cash + amt)
-      else if (p.method === 'iban') iban = roundCurrency(iban + amt)
-      else card = roundCurrency(card + amt)
+      if (dateRange && p.createdAt) {
+        const pd = new Date(p.createdAt)
+        if (!Number.isNaN(pd.getTime()) && (pd < dateRange.start || pd > dateRange.end)) {
+          continue
+        }
+      }
+      const amtKurus = Math.max(0, toKurus(p.amount))
+      const method = normalizePaymentMethod(p.method, 'cash')
+      if (p.type === 'IADE') {
+        if (method === 'cash') cashKurus = Math.max(0, cashKurus - amtKurus)
+        else if (method === 'iban') ibanKurus = Math.max(0, ibanKurus - amtKurus)
+        else cardKurus = Math.max(0, cardKurus - amtKurus)
+      } else {
+        if (method === 'cash') cashKurus += amtKurus
+        else if (method === 'iban') ibanKurus += amtKurus
+        else cardKurus += amtKurus
+      }
     }
   }
 
+  const card = fromKurus(cardKurus)
+  const cash = fromKurus(cashKurus)
+  const iban = fromKurus(ibanKurus)
+
   return {
-    total: roundCurrency(card + cash + iban),
+    total: fromKurus(cardKurus + cashKurus + ibanKurus),
     byMethod: { card, cash, iban },
   }
 }
@@ -377,13 +473,17 @@ export const buildReportFromOrders = (
   const validOrders = orders.filter((o) => !o.cancelled && !o.reopened)
   const cancelledOrdersRaw = orders.filter((o) => Boolean(o.cancelled))
 
-  let totalRevenue = 0
-  let grossItemsRevenue = 0
-  let totalDiscount = 0
+  let totalRevenueKurus = 0
+  let closedTablesGrossKurus = 0
+  let openTablesGrossKurus = 0
+  let openTablesNetKurus = 0
+  let openTablesDiscountKurus = 0
+  let openTablesCount = 0
+  let totalDiscountKurus = 0
   let rawCardTax = 0
-  let cardTotal = 0
-  let cashTotal = 0
-  let ibanTotal = 0
+  let cardTotalKurus = 0
+  let cashTotalKurus = 0
+  let ibanTotalKurus = 0
 
   const productMap = new Map<
     string,
@@ -409,16 +509,14 @@ export const buildReportFromOrders = (
     const applied = getOrderAppliedPayments(order)
     const orderRev = applied.total
 
-    totalRevenue = roundCurrency(totalRevenue + orderRev)
-    grossItemsRevenue = roundCurrency(
-      grossItemsRevenue + calculateCartItemsGrossRevenue(order.items),
-    )
-    cardTotal = roundCurrency(cardTotal + applied.card)
-    cashTotal = roundCurrency(cashTotal + applied.cash)
-    ibanTotal = roundCurrency(ibanTotal + applied.iban)
+    totalRevenueKurus += toKurus(orderRev)
+    closedTablesGrossKurus += toKurus(calculateCartItemsGrossRevenue(order.items))
+    cardTotalKurus += toKurus(applied.card)
+    cashTotalKurus += toKurus(applied.cash)
+    ibanTotalKurus += toKurus(applied.iban)
 
     const orderDisc = roundCurrency(order.totals?.discount || 0)
-    totalDiscount = roundCurrency(totalDiscount + orderDisc)
+    totalDiscountKurus += toKurus(orderDisc)
 
     const rate = typeof order.taxRate === 'number' ? order.taxRate : defaultTaxRate
     if (rate > 0 && applied.card > 0) {
@@ -426,7 +524,9 @@ export const buildReportFromOrders = (
     }
 
     const orderDate = new Date(order.date)
-    const hour = Number.isNaN(orderDate.getTime()) ? 0 : orderDate.getHours()
+    const hour = Number.isNaN(orderDate.getTime())
+      ? 0
+      : getIstanbulParts(orderDate).hour
     const hourBucket = hourlyMap.get(hour) || { revenue: 0, orders: 0 }
     hourBucket.revenue = roundCurrency(hourBucket.revenue + orderRev)
     hourBucket.orders += 1
@@ -487,28 +587,37 @@ export const buildReportFromOrders = (
     })
   }
 
-  // Açık masalardaki (kapanmamış / ödemesi alınmamış) ürünlerin brüt toplamını da Toplam Ciro'ya ekle
+  // Açık masalardaki (kapanmamış / ödemesi alınmamış) ürünlerin brüt ve net toplamlarını hesapla
   if (tables && tables.length > 0) {
     for (const t of tables) {
       if (!isTableOccupied(t) && t.cart.length === 0) continue
+      let itemsToCount = t.cart
       if (options?.dateRange) {
         const { start, end } = options.dateRange
-        const itemsInRange = t.cart.filter((item) => {
+        itemsToCount = t.cart.filter((item) => {
           const itemDate = item.addedAt ? new Date(item.addedAt) : new Date()
           return itemDate >= start && itemDate <= end
         })
-        grossItemsRevenue = roundCurrency(
-          grossItemsRevenue + calculateCartItemsGrossRevenue(itemsInRange),
-        )
-      } else {
-        grossItemsRevenue = roundCurrency(
-          grossItemsRevenue + calculateCartItemsGrossRevenue(t.cart),
-        )
       }
+      const tableGross = calculateCartItemsGrossRevenue(itemsToCount)
+      const hasValidTablePayments = Boolean(
+        t.payments && t.payments.some((p) => isValidPaymentMovement(p) && p.type !== 'IADE'),
+      )
+      if (tableGross > 0 || hasValidTablePayments) {
+        openTablesCount += 1
+      }
+      openTablesGrossKurus += toKurus(tableGross)
+      const tableTotals = calculateTotals(itemsToCount, t.discountRate || 0, t.discountAmount || 0)
+      openTablesNetKurus += toKurus(tableTotals.total)
+      openTablesDiscountKurus += toKurus(tableTotals.discount)
     }
   }
 
-  // Deduct refunds from revenue and payment method breakdown
+  const openTablesInfo = tables
+    ? computeOpenTablesPartialPayments(tables, openBusinessDayId, options?.dateRange)
+    : undefined
+
+  // Deduct paid refunds from revenue and payment method breakdown
   const allRefunds = passedRefunds ?? getStoredRefunds()
   const relevantRefunds = allRefunds.filter((r) => {
     if (openBusinessDayId) return r.businessDayId === openBusinessDayId
@@ -522,26 +631,59 @@ export const buildReportFromOrders = (
     return true
   })
 
-  let totalRefunds = 0
+  let totalRefundsKurus = 0
+  let paidRefundsKurus = 0
+  let unpaidRefundsKurus = 0
+
   for (const r of relevantRefunds) {
-    const amt = roundCurrency(r.amount)
-    totalRefunds = roundCurrency(totalRefunds + amt)
-    if (r.paymentMethod === 'card') {
-      cardTotal = Math.max(0, roundCurrency(cardTotal - amt))
+    const amtKurus = Math.max(0, toKurus(r.amount))
+    const amtTl = fromKurus(amtKurus)
+    totalRefundsKurus += amtKurus
+
+    if (!isPaidRefund(r)) {
+      unpaidRefundsKurus += amtKurus
+      continue
+    }
+
+    paidRefundsKurus += amtKurus
+    const refMethod = normalizePaymentMethod(r.paymentMethod, 'cash')
+    if (refMethod === 'card') {
+      cardTotalKurus = Math.max(0, cardTotalKurus - amtKurus)
       if (defaultTaxRate > 0) {
-        rawCardTax -= (amt * defaultTaxRate) / 100
+        rawCardTax -= (amtTl * defaultTaxRate) / 100
       }
-    } else if (r.paymentMethod === 'iban') {
-      ibanTotal = Math.max(0, roundCurrency(ibanTotal - amt))
+    } else if (refMethod === 'iban') {
+      ibanTotalKurus = Math.max(0, ibanTotalKurus - amtKurus)
     } else {
-      cashTotal = Math.max(0, roundCurrency(cashTotal - amt))
+      cashTotalKurus = Math.max(0, cashTotalKurus - amtKurus)
     }
   }
 
+  const cardTotal = fromKurus(cardTotalKurus)
+  const cashTotal = fromKurus(cashTotalKurus)
+  const ibanTotal = fromKurus(ibanTotalKurus)
+  const totalRevenue = fromKurus(totalRevenueKurus)
+  const totalRefunds = fromKurus(totalRefundsKurus)
+  const paidRefundsTotal = fromKurus(paidRefundsKurus)
+  const unpaidRefundsTotal = fromKurus(unpaidRefundsKurus)
+  const totalDiscount = fromKurus(totalDiscountKurus)
+  const closedTablesGrossRevenue = fromKurus(closedTablesGrossKurus)
+  const openTablesGrossRevenue = fromKurus(openTablesGrossKurus)
+  const grossItemsRevenue = fromKurus(closedTablesGrossKurus + openTablesGrossKurus)
+  const openTablesNetTotal = fromKurus(openTablesNetKurus)
+  const openTablesDiscountTotal = fromKurus(openTablesDiscountKurus)
+  const openPaymentsKurus = openTablesInfo ? toKurus(openTablesInfo.total) : 0
+  const openTablesUnpaidBalance = fromKurus(Math.max(0, openTablesNetKurus - openPaymentsKurus))
+
   const totalTax = cardTotal <= 0 ? 0 : Math.max(0, roundCurrency(rawCardTax))
-  const netRevenue = Math.max(0, roundCurrency(totalRevenue - totalRefunds))
+  const netRevenueKurus = cardTotalKurus + cashTotalKurus + ibanTotalKurus
+  const netRevenue = fromKurus(netRevenueKurus)
+  const totalCollectedRevenue = fromKurus(
+    Math.max(0, netRevenueKurus + openPaymentsKurus),
+  )
 
   const orderCount = validOrders.length
+  const averageBasket = orderCount > 0 ? roundCurrency(netRevenue / orderCount) : 0
 
   const soldProducts: SoldProductReportItem[] = Array.from(productMap.values())
     .map((p) => ({
@@ -572,12 +714,12 @@ export const buildReportFromOrders = (
     orders: data.orders,
   }))
 
-  let cancelledTotal = 0
+  let cancelledTotalKurus = 0
   const cancelledOrders: CancelledOrderSummary[] = cancelledOrdersRaw
     .sort((a, b) => new Date(b.cancelledAt || b.date).getTime() - new Date(a.cancelledAt || a.date).getTime())
     .map((o) => {
       const tot = roundCurrency(o.totals?.total || 0)
-      cancelledTotal = roundCurrency(cancelledTotal + tot)
+      cancelledTotalKurus += toKurus(tot)
       const itemCount = o.items.reduce((sum, i) => sum + i.quantity, 0)
       const itemsSummary = o.items.map((i) => `${i.name} ×${i.quantity}`).join(', ')
       return {
@@ -591,25 +733,37 @@ export const buildReportFromOrders = (
         itemsSummary,
       }
     })
-
-  const openTablesInfo = tables
-    ? computeOpenTablesPartialPayments(tables, openBusinessDayId)
-    : undefined
+  const cancelledTotal = fromKurus(cancelledTotalKurus)
 
   return {
     generatedAt: new Date().toISOString(),
     totalRevenue: netRevenue,
     grossItemsRevenue,
+    closedTablesGrossRevenue,
+    openTablesGrossRevenue,
+    openTablesNetTotal,
+    openTablesUnpaidBalance,
+    openTablesCount,
+    openTablesDiscountTotal,
     paidTablesTotal: netRevenue,
+    totalCollectedRevenue,
     totalRefunds,
+    paidRefundsTotal,
+    unpaidRefundsTotal,
     refundCount: relevantRefunds.length,
     orderCount,
+    averageBasket,
     totalTax,
     totalDiscount,
     cancelledCount: cancelledOrders.length,
     cancelledTotal,
     cancelledOrders,
     paymentDistribution: {
+      card: cardTotal,
+      cash: cashTotal,
+      iban: ibanTotal,
+    },
+    closedPaymentDistribution: {
       card: cardTotal,
       cash: cashTotal,
       iban: ibanTotal,
@@ -626,6 +780,8 @@ export const buildReportFromOrders = (
   }
 }
 
+export const hesaplaGunToplamlari = buildReportFromOrders
+
 export const getReportForBusinessDay = (
   day: BusinessDay,
   allOrders: CompletedOrder[],
@@ -639,9 +795,38 @@ export const getReportForBusinessDay = (
   )
 
   if (day.status === 'closed' && day.report) {
-    const dayValidOrders = allOrders.filter(
-      (o) => o.businessDayId === day.id && !o.cancelled && !o.reopened,
-    )
+    const dayOrders = allOrders.filter((o) => o.businessDayId === day.id)
+    const dayValidOrders = dayOrders.filter((o) => !o.cancelled && !o.reopened)
+
+    if (
+      dayValidOrders.length > 0 &&
+      (day.report.totalRefunds || 0) > 0 &&
+      day.report.unpaidRefundsTotal === undefined
+    ) {
+      const healed = buildReportFromOrders(dayOrders, defaultTaxRate, undefined, day.id)
+      if ((healed.unpaidRefundsTotal || 0) > 0) {
+        const enteredZVal = day.report.enteredZ ?? day.enteredZ ?? cardBreakdown.enteredZ
+        return {
+          ...healed,
+          cardCarryIn: day.report.cardCarryIn ?? day.cardCarryIn ?? cardBreakdown.cardCarryIn,
+          cardBeforeCutoff:
+            day.report.cardBeforeCutoff ?? day.cardBeforeCutoff ?? cardBreakdown.cardBeforeCutoff,
+          cardAfterCutoff:
+            day.report.cardAfterCutoff ?? day.cardAfterCutoff ?? cardBreakdown.cardAfterCutoff,
+          cardCarryOut:
+            day.report.cardCarryOut ?? day.cardCarryOut ?? cardBreakdown.cardCarryOut,
+          expectedZ: healed.paymentDistribution.card,
+          enteredZ: enteredZVal,
+          zDifference:
+            typeof enteredZVal === 'number'
+              ? roundCurrency(enteredZVal - healed.paymentDistribution.card)
+              : (day.report.zDifference ?? day.zDifference ?? cardBreakdown.zDifference),
+          posZCutoffTime:
+            day.report.posZCutoffTime ?? day.posZCutoffTime ?? cardBreakdown.posZCutoffTime,
+        }
+      }
+    }
+
     const fallbackGrossItems =
       dayValidOrders.length > 0
         ? roundCurrency(
@@ -652,10 +837,21 @@ export const getReportForBusinessDay = (
           )
         : day.report.totalRevenue
 
+    const paidTables = day.report.paidTablesTotal ?? day.report.totalRevenue
+    const grossItems = day.report.grossItemsRevenue ?? fallbackGrossItems
+    const closedGross = day.report.closedTablesGrossRevenue ?? fallbackGrossItems
+    const openGross =
+      day.report.openTablesGrossRevenue ?? Math.max(0, roundCurrency(grossItems - closedGross))
+
     return {
       ...day.report,
-      grossItemsRevenue: day.report.grossItemsRevenue ?? fallbackGrossItems,
-      paidTablesTotal: day.report.paidTablesTotal ?? day.report.totalRevenue,
+      grossItemsRevenue: grossItems,
+      closedTablesGrossRevenue: closedGross,
+      openTablesGrossRevenue: openGross,
+      paidTablesTotal: paidTables,
+      totalCollectedRevenue:
+        day.report.totalCollectedRevenue ??
+        roundCurrency(paidTables + (day.report.openTablePaymentsTotal || 0)),
       cardCarryIn: day.report.cardCarryIn ?? day.cardCarryIn ?? cardBreakdown.cardCarryIn,
       cardBeforeCutoff:
         day.report.cardBeforeCutoff ?? day.cardBeforeCutoff ?? cardBreakdown.cardBeforeCutoff,
@@ -752,23 +948,30 @@ export const exportReportToCsv = (
   ])
 
   if (day) {
+    const openCash = report.openTablePaymentsByMethod?.cash || 0
+    const cashSales = roundCurrency(report.paymentDistribution.cash + openCash)
     const expected =
-      day.expectedCash ?? roundCurrency(day.openingCash + report.paymentDistribution.cash)
+      day.expectedCash ?? roundCurrency(day.openingCash + cashSales)
     rows.push([])
     rows.push(['KASA ÖZETİ', 'TUTAR (TL)'])
     rows.push(['Açılış Nakiti', formatNum(day.openingCash)])
-    rows.push(['Nakit Satışlar', formatNum(report.paymentDistribution.cash)])
+    rows.push(['Nakit Satışlar', formatNum(cashSales)])
+    if (openCash > 0) {
+      rows.push(['  ↳ Açık Masalarda Alınan Nakit', formatNum(openCash)])
+    }
     rows.push(['Beklenen Nakit', formatNum(expected)])
     if (day.status === 'closed' && typeof day.countedCash === 'number') {
       rows.push(['Sayılan Nakit', formatNum(day.countedCash)])
       rows.push(['Kasa Farkı', formatNum(day.cashDifference ?? day.countedCash - expected)])
     }
 
-    const expectedZ = report.expectedZ ?? day.expectedZ ?? report.paymentDistribution.card
+    const openCard = report.openTablePaymentsByMethod?.card || 0
+    const cardSales = roundCurrency(report.paymentDistribution.card + openCard)
+    const expectedZ = report.expectedZ ?? day.expectedZ ?? cardSales
 
     rows.push([])
     rows.push(['POS Z RAPORU ÖZETİ', 'TUTAR (TL)'])
-    rows.push(['Kart Satışları (Toplam)', formatNum(report.paymentDistribution.card)])
+    rows.push(['Kart Satışları (Toplam)', formatNum(cardSales)])
     rows.push(['Beklenen POS Z Raporu', formatNum(expectedZ)])
     const enteredZVal = report.enteredZ ?? day.enteredZ
     if (typeof enteredZVal === 'number') {

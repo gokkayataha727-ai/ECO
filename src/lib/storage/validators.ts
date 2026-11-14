@@ -9,6 +9,7 @@ import type { ActivityLog } from '../../types'
 import type { User } from '../../types'
 import type { POSBackupFile, POSBackupPayload } from './types'
 import { verifyChecksum } from './checksum'
+import { normalizeOrderPaymentMethod, normalizePaymentMethod } from '../format'
 
 export function isObject(val: unknown): val is Record<string, any> {
   return typeof val === 'object' && val !== null && !Array.isArray(val)
@@ -19,6 +20,19 @@ export function validateTable(item: unknown): Table | null {
   if (typeof item.id !== 'string' || !item.id.trim()) return null
   if (typeof item.name !== 'string' || !item.name.trim()) return null
 
+  const normalizedPayments = Array.isArray(item.payments)
+    ? item.payments.map((p: any) =>
+        isObject(p)
+          ? {
+              ...p,
+              type: p.type === 'IADE' ? ('IADE' as const) : ('ODEME' as const),
+              status: p.status === 'IPTAL' ? ('IPTAL' as const) : ('GECERLI' as const),
+              method: normalizePaymentMethod(p.method, 'cash'),
+            }
+          : p,
+      )
+    : []
+
   return {
     id: item.id.trim(),
     name: item.name.trim(),
@@ -28,7 +42,7 @@ export function validateTable(item: unknown): Table | null {
     customerName: typeof item.customerName === 'string' ? item.customerName : undefined,
     discountRate: typeof item.discountRate === 'number' && Number.isFinite(item.discountRate) ? item.discountRate : 0,
     discountAmount: typeof item.discountAmount === 'number' && Number.isFinite(item.discountAmount) && item.discountAmount >= 0 ? item.discountAmount : 0,
-    payments: Array.isArray(item.payments) ? item.payments : [],
+    payments: normalizedPayments,
   }
 }
 
@@ -52,14 +66,30 @@ export function validateCompletedOrder(item: unknown): CompletedOrder | null {
   const subtotal = typeof item.totals.subtotal === 'number' ? item.totals.subtotal : 0
   const total = typeof item.totals.total === 'number' ? item.totals.total : 0
   const discount = typeof item.totals.discount === 'number' ? item.totals.discount : 0
+  const isReopened = Boolean(item.reopened)
+  const normalizedPayments = Array.isArray(item.payments)
+    ? item.payments.map((p: any) =>
+        isObject(p)
+          ? {
+              ...p,
+              type: p.type === 'IADE' ? ('IADE' as const) : ('ODEME' as const),
+              status:
+                p.status === 'IPTAL' || isReopened
+                  ? ('IPTAL' as const)
+                  : ('GECERLI' as const),
+              method: normalizePaymentMethod(p.method, 'cash'),
+            }
+          : p,
+      )
+    : []
 
   return {
     id: item.id.trim(),
     orderNumber: item.orderNumber,
     items: item.items,
     totals: { subtotal, total, discount },
-    paymentMethod: typeof item.paymentMethod === 'string' ? (item.paymentMethod as any) : 'cash',
-    payments: Array.isArray(item.payments) ? item.payments : [],
+    paymentMethod: normalizeOrderPaymentMethod(item.paymentMethod, 'cash'),
+    payments: normalizedPayments,
     date: typeof item.date === 'string' ? item.date : new Date().toISOString(),
     note: typeof item.note === 'string' ? item.note : undefined,
     customerName: typeof item.customerName === 'string' ? item.customerName : undefined,
@@ -72,10 +102,14 @@ export function validateCompletedOrder(item: unknown): CompletedOrder | null {
     taxRate: typeof item.taxRate === 'number' ? item.taxRate : 10,
     cancelled: Boolean(item.cancelled),
     cancelledAt: typeof item.cancelledAt === 'string' ? item.cancelledAt : undefined,
-    reopened: Boolean(item.reopened),
+    reopened: isReopened,
     reopenedAt: typeof item.reopenedAt === 'string' ? item.reopenedAt : undefined,
     reopenReason: typeof item.reopenReason === 'string' ? item.reopenReason : undefined,
     reopenedBy: typeof item.reopenedBy === 'string' ? item.reopenedBy : undefined,
+    reopenedToTableId: typeof item.reopenedToTableId === 'string' ? item.reopenedToTableId : undefined,
+    reopenedToTableName: typeof item.reopenedToTableName === 'string' ? item.reopenedToTableName : undefined,
+    cancelledPaymentsTotal: typeof item.cancelledPaymentsTotal === 'number' ? item.cancelledPaymentsTotal : undefined,
+    cancelledPaymentsSummary: typeof item.cancelledPaymentsSummary === 'string' ? item.cancelledPaymentsSummary : undefined,
   }
 }
 
@@ -166,7 +200,11 @@ export function validateRefund(item: unknown): Refund | null {
     tableId: typeof item.tableId === 'string' ? item.tableId : undefined,
     tableName: typeof item.tableName === 'string' ? item.tableName : undefined,
     amount: Math.max(0, item.amount),
-    paymentMethod: typeof item.paymentMethod === 'string' ? (item.paymentMethod as any) : undefined,
+    paymentMethod:
+      typeof item.paymentMethod === 'string' && item.paymentMethod.trim()
+        ? normalizePaymentMethod(item.paymentMethod, 'cash')
+        : undefined,
+    paymentReceived: typeof item.paymentReceived === 'boolean' ? item.paymentReceived : undefined,
     reason: typeof item.reason === 'string' ? item.reason : 'İade',
     refundedAt: typeof item.refundedAt === 'string' ? item.refundedAt : undefined,
     refundedBy: typeof item.refundedBy === 'string' ? item.refundedBy : undefined,

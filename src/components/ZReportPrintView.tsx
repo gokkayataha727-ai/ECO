@@ -41,8 +41,14 @@ export function ZReportPrintView({
       })
     : 'Açık Vardiya'
 
+  const openTableCash =
+    day?.status === 'open' ? (report.openTablePaymentsByMethod?.cash || 0) : 0
+  const openTableCard =
+    day?.status === 'open' ? (report.openTablePaymentsByMethod?.card || 0) : 0
+
   const expectedCash = day
-    ? (day.expectedCash ?? roundCurrency(day.openingCash + report.paymentDistribution.cash))
+    ? (day.expectedCash ??
+      roundCurrency(day.openingCash + report.paymentDistribution.cash + openTableCash))
     : report.paymentDistribution.cash
 
   const cashDiff =
@@ -50,12 +56,18 @@ export function ZReportPrintView({
       ? (day.cashDifference ?? roundCurrency(day.countedCash - expectedCash))
       : null
 
-  const expectedZ = report.expectedZ ?? day?.expectedZ ?? report.paymentDistribution.card
+  const expectedZ =
+    report.expectedZ ??
+    day?.expectedZ ??
+    roundCurrency(report.paymentDistribution.card + openTableCard)
   const enteredZ = report.enteredZ ?? day?.enteredZ
   const zDiff =
     typeof enteredZ === 'number'
       ? (report.zDifference ?? day?.zDifference ?? roundCurrency(enteredZ - expectedZ))
       : null
+  const openGross = roundCurrency(report.openTablesGrossRevenue || 0)
+  const paidRefunds = roundCurrency(report.paidRefundsTotal || 0)
+  const openPartial = roundCurrency(report.openTablePaymentsTotal || 0)
 
   if (mode === 'a4') {
     return (
@@ -162,6 +174,24 @@ export function ZReportPrintView({
                 <span>IBAN / Havale</span>
                 <strong>{formatCurrency(report.paymentDistribution.iban)}</strong>
               </div>
+              {openPartial > 0 && (
+                <div className="flex justify-between pt-1 border-t border-stone-100 text-amber-800 font-bold">
+                  <span>Açık Masa Ara Ödeme</span>
+                  <strong>{formatCurrency(openPartial)}</strong>
+                </div>
+              )}
+              {openGross > 0 && (
+                <div className="flex justify-between text-stone-600">
+                  <span>Açık Masalar (Brüt)</span>
+                  <strong>{formatCurrency(openGross)}</strong>
+                </div>
+              )}
+              {paidRefunds > 0 && (
+                <div className="flex justify-between text-rose-700">
+                  <span>Ödeme İadeleri</span>
+                  <strong>-{formatCurrency(paidRefunds)}</strong>
+                </div>
+              )}
             </div>
           </div>
 
@@ -328,6 +358,24 @@ export function ZReportPrintView({
           <span>Ödenen Masalar Toplamı</span>
           <span>{formatCurrency(report.paidTablesTotal ?? report.totalRevenue)}</span>
         </div>
+        {openGross > 0 && (
+          <div className="receipt-line">
+            <span>Açık Masalar (Brüt)</span>
+            <span>{formatCurrency(openGross)}</span>
+          </div>
+        )}
+        {openPartial > 0 && (
+          <div className="receipt-line">
+            <span>Açık Masa Ara Ödeme</span>
+            <span>{formatCurrency(openPartial)}</span>
+          </div>
+        )}
+        {paidRefunds > 0 && (
+          <div className="receipt-line">
+            <span>Ödeme İadeleri</span>
+            <span>-{formatCurrency(paidRefunds)}</span>
+          </div>
+        )}
         <div className="receipt-line">
           <span>Toplam İndirim</span>
           <span>-{formatCurrency(report.totalDiscount)}</span>

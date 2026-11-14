@@ -37,6 +37,8 @@ export function createMockCartItem(overrides?: Partial<CartItem>): CartItem {
 export function createMockPayment(overrides?: Partial<PartialPayment>): PartialPayment {
   return {
     id: generateUUID(),
+    type: 'ODEME',
+    status: 'GECERLI',
     method: 'cash',
     amount: 100,
     createdAt: new Date().toISOString(),

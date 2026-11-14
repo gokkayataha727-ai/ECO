@@ -25,6 +25,7 @@ import {
   formatCurrency,
   formatIban,
   formatTime,
+  normalizePaymentMethod,
   paymentMethodLabel,
   roundCurrency,
   sanitizeDecimalInput,
@@ -75,6 +76,7 @@ export function PaymentModal({
   note,
   onClose,
   onNewOrder,
+  onPaid,
   onAddPayment,
   onUndoLastPayment,
   orderNumber,
@@ -113,9 +115,13 @@ export function PaymentModal({
 
   const grandTotal = roundCurrency(totals.total)
   const baseTotalBeforePaymentDiscount = roundCurrency(grandTotal + discountAmount)
-  const { paidTotal, remaining } = derivePaymentState(grandTotal, payments)
+  const { paidTotal, remaining, overpayment } = derivePaymentState(grandTotal, payments)
   const maxApplicableDiscount = Math.max(0, roundCurrency(baseTotalBeforePaymentDiscount - paidTotal))
-  const hasPartialPayments = payments.length > 0
+  const validPayments = useMemo(
+    () => (payments || []).filter((p) => (p.status || 'GECERLI') !== 'IPTAL' && p.type !== 'IADE'),
+    [payments],
+  )
+  const hasPartialPayments = validPayments.length > 0
 
   const lineStates = useMemo(
     () => deriveLinePaymentStates(cart, discountRate, payments, discountAmount),
@@ -252,6 +258,18 @@ export function PaymentModal({
     setSplitCount(null)
     setShowDiscountEditor(false)
     setDiscountInput('')
+    const newRemainingAfterDiscount = Math.max(
+      0,
+      roundCurrency(baseTotalBeforePaymentDiscount - nextDiscount - paidTotal),
+    )
+    if (newRemainingAfterDiscount === 0 && paidTotal > 0) {
+      const uniqueMethods = new Set(payments.map((p) => normalizePaymentMethod(p.method, 'cash')))
+      const finalMethod: PaymentMethod =
+        uniqueMethods.size > 1
+          ? 'mixed'
+          : normalizePaymentMethod(payments[0]?.method, 'cash')
+      onPaid(finalMethod)
+    }
   }
 
   const handleClearDiscount = () => {
@@ -267,6 +285,7 @@ export function PaymentModal({
   const isAmountZeroOrEmpty = amountInput.trim() === '' || amountToPay <= 0
   const isAmountExceeding = amountToPay > roundCurrency(remaining + 0.001)
   const isAmountValid = !isAmountZeroOrEmpty && !isAmountExceeding
+  const isZeroRemainingToComplete = remaining === 0 && paidTotal > 0 && !paidMethod
 
   // İŞ 2: Kullanıcı tutarı seçili ürün toplamından farklı girdiyse tutar bazlı kısmi ödeme uygulanır
   const isManualAmountWithSelection =
@@ -274,7 +293,7 @@ export function PaymentModal({
 
   const appliedAmount = isAmountValid ? Math.min(amountToPay, remaining) : 0
 
-  const canConfirm = isAmountValid && remaining > 0
+  const canConfirm = (isAmountValid && remaining > 0) || isZeroRemainingToComplete
 
   const title = showReceipt ? 'Fiş Önizleme' : paidMethod ? 'Ödeme Başarılı' : 'Ödeme Al'
 
@@ -375,6 +394,16 @@ export function PaymentModal({
 
   const handleConfirm = () => {
     if (!canConfirm || processing) return
+    if (isZeroRemainingToComplete) {
+      const uniqueMethods = new Set(payments.map((p) => normalizePaymentMethod(p.method, 'cash')))
+      const finalMethod: PaymentMethod =
+        uniqueMethods.size > 1
+          ? 'mixed'
+          : normalizePaymentMethod(payments[0]?.method, 'cash')
+      onPaid(finalMethod)
+      return
+    }
+    const normalizedMethod = normalizePaymentMethod(method, 'cash')
     const payAmount = roundCurrency(Math.min(amountToPay, remaining))
     const newRemaining = Math.max(0, roundCurrency(remaining - payAmount))
     const isComplete = newRemaining === 0
@@ -386,9 +415,9 @@ export function PaymentModal({
 
     const paymentEntry: PartialPayment = {
       id: generateUUID(),
-      method,
+      method: normalizedMethod,
       amount: payAmount,
-      ...(method === 'cash'
+      ...(normalizedMethod === 'cash'
         ? {
             receivedAmount: payAmount,
             change: 0,
@@ -405,9 +434,9 @@ export function PaymentModal({
     }
 
     const allPayments = [...payments, paymentEntry]
-    const uniqueMethods = new Set(allPayments.map((p) => p.method))
+    const uniqueMethods = new Set(allPayments.map((p) => normalizePaymentMethod(p.method, 'cash')))
     const finalMethod: PaymentMethod =
-      uniqueMethods.size > 1 ? 'mixed' : method
+      uniqueMethods.size > 1 ? 'mixed' : normalizedMethod
 
     const paidItemNames = paidItemsPayload
       ? paidItemsPayload
@@ -842,6 +871,16 @@ export function PaymentModal({
                   <strong>{formatCurrency(remaining)}</strong>
                 </div>
               </div>
+
+              {overpayment > 0 && (
+                <div
+                  role="status"
+                  className="rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 flex items-center justify-between text-xs font-bold text-rose-700 dark:text-rose-300"
+                >
+                  <span>Fazla Ödeme / İade Edilecek</span>
+                  <strong>{formatCurrency(overpayment)}</strong>
+                </div>
+              )}
 
               {onApplyDiscountAmount && remaining > 0 && (
                 <div className="rounded-xl border border-[#dfd5cc] dark:border-stone-700 bg-[#fcfaf7] dark:bg-stone-800/70 px-3 py-2">
@@ -1294,9 +1333,11 @@ export function PaymentModal({
                   <CheckCircle2 key="confirm-icon-iban" size={18} />
                 )}
                 <span>
-                  {hasItemSelection && !isManualAmountWithSelection
-                    ? `Seçili Ürünleri Öde (${formatCurrency(appliedAmount)})`
-                    : `${method ? paymentMethodLabel(method).toLocaleUpperCase('tr-TR') : 'Öde'} (${formatCurrency(appliedAmount)})`}
+                  {isZeroRemainingToComplete
+                    ? 'Siparişi Tamamla (Kalan ₺0,00)'
+                    : hasItemSelection && !isManualAmountWithSelection
+                      ? `Seçili Ürünleri Öde (${formatCurrency(appliedAmount)})`
+                      : `${method ? paymentMethodLabel(method).toLocaleUpperCase('tr-TR') : 'Öde'} (${formatCurrency(appliedAmount)})`}
                 </span>
               </button>
             </div>

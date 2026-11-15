@@ -58,6 +58,7 @@ const MIGRATIONS = [
           closing_cash_kurus INTEGER,
           expected_cash_kurus INTEGER,
           cash_difference_kurus INTEGER,
+          cash_difference_note TEXT,
           note TEXT,
           close_note TEXT,
           expected_z_kurus INTEGER,
@@ -199,6 +200,7 @@ const MIGRATIONS = [
           amount_kurus INTEGER NOT NULL,
           payment_method TEXT,
           payment_received INTEGER,
+          payment_movement_id TEXT,
           reason TEXT NOT NULL,
           created_at TEXT,
           created_by TEXT,
@@ -294,6 +296,26 @@ const MIGRATIONS = [
           archived_at TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_activity_logs_archive_created_at ON activity_logs_archive(created_at DESC);
+
+        -- 15. Cash Movements (Gün İçi Kasa Giriş / Çıkış Hareketleri)
+        CREATE TABLE IF NOT EXISTS cash_movements (
+          id TEXT PRIMARY KEY,
+          business_day_id TEXT NOT NULL,
+          type TEXT NOT NULL CHECK (type IN ('GIRIS', 'CIKIS')),
+          amount_kurus INTEGER NOT NULL,
+          category TEXT NOT NULL,
+          description TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          created_by TEXT NOT NULL,
+          user_id TEXT,
+          cancelled INTEGER NOT NULL DEFAULT 0,
+          cancelled_at TEXT,
+          cancelled_by TEXT,
+          cancelled_reason TEXT,
+          sort_order INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_cash_movements_day ON cash_movements(business_day_id);
+        CREATE INDEX IF NOT EXISTS idx_cash_movements_created ON cash_movements(created_at DESC);
       `)
     },
   },
@@ -370,6 +392,16 @@ function ensureActivityLogChainSchema(db) {
       if (!colNames.has('payment_received')) {
         db.exec('ALTER TABLE refunds ADD COLUMN payment_received INTEGER')
       }
+      if (!colNames.has('payment_movement_id')) {
+        db.exec('ALTER TABLE refunds ADD COLUMN payment_movement_id TEXT')
+      }
+    }
+    const businessDayCols = db.pragma('table_info(business_days)')
+    if (Array.isArray(businessDayCols) && businessDayCols.length > 0) {
+      const colNames = new Set(businessDayCols.map((c) => c.name))
+      if (!colNames.has('cash_difference_note')) {
+        db.exec('ALTER TABLE business_days ADD COLUMN cash_difference_note TEXT')
+      }
     }
     db.exec(`
       CREATE TABLE IF NOT EXISTS activity_logs_archive (
@@ -395,6 +427,25 @@ function ensureActivityLogChainSchema(db) {
         archived_at TEXT NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_activity_logs_archive_created_at ON activity_logs_archive(created_at DESC);
+
+      CREATE TABLE IF NOT EXISTS cash_movements (
+        id TEXT PRIMARY KEY,
+        business_day_id TEXT NOT NULL,
+        type TEXT NOT NULL CHECK (type IN ('GIRIS', 'CIKIS')),
+        amount_kurus INTEGER NOT NULL,
+        category TEXT NOT NULL,
+        description TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        user_id TEXT,
+        cancelled INTEGER NOT NULL DEFAULT 0,
+        cancelled_at TEXT,
+        cancelled_by TEXT,
+        cancelled_reason TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS idx_cash_movements_day ON cash_movements(business_day_id);
+      CREATE INDEX IF NOT EXISTS idx_cash_movements_created ON cash_movements(created_at DESC);
     `)
   } catch {}
 }

@@ -297,8 +297,12 @@ export const CartPanel = memo(function CartPanel({
             <strong>{formatCurrency(paidTotal)}</strong>
           </div>
           {overpayment > 0 && (
-            <div className="total-row flex justify-between text-rose-600 dark:text-rose-400 font-bold">
-              <span>Fazla Ödeme / İade Edilecek</span>
+            <div
+              role="status"
+              data-testid="cart-overpayment-row"
+              className="total-row flex justify-between text-rose-600 dark:text-rose-400 font-bold"
+            >
+              <span>Fazla Ödeme / İade Edilecek: {formatCurrency(overpayment)}</span>
               <strong>{formatCurrency(overpayment)}</strong>
             </div>
           )}

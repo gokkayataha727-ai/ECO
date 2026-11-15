@@ -280,6 +280,8 @@ function openBusinessDayTransaction(db, params, options = {}) {
     throw new Error('openBusinessDayTransaction: Geçerli bir iş günü nesnesi gereklidir.')
   }
 
+  ensureActivityLogChainSchema(db)
+
   const tx = db.transaction(() => {
     maybeFailStep('before_check_open_day', options)
 
@@ -314,6 +316,8 @@ function closeBusinessDayTransaction(db, params, options = {}) {
   if (!closedDay || !closedDay.id) {
     throw new Error('closeBusinessDayTransaction: Geçerli bir iş günü nesnesi gereklidir.')
   }
+
+  ensureActivityLogChainSchema(db)
 
   const tx = db.transaction(() => {
     maybeFailStep('before_close_day', options)

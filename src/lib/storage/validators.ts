@@ -1,5 +1,6 @@
 import type {
   BusinessDay,
+  CashMovement,
   CompletedOrder,
   Product,
   Refund,
@@ -28,6 +29,12 @@ export function validateTable(item: unknown): Table | null {
               type: p.type === 'IADE' ? ('IADE' as const) : ('ODEME' as const),
               status: p.status === 'IPTAL' ? ('IPTAL' as const) : ('GECERLI' as const),
               method: normalizePaymentMethod(p.method, 'cash'),
+              ...(typeof p.reason === 'string' && !p.cancelledReason
+                ? { cancelledReason: p.reason }
+                : {}),
+              ...(typeof p.cancelledReason === 'string' && !p.reason
+                ? { reason: p.cancelledReason }
+                : {}),
             }
           : p,
       )
@@ -78,6 +85,12 @@ export function validateCompletedOrder(item: unknown): CompletedOrder | null {
                   ? ('IPTAL' as const)
                   : ('GECERLI' as const),
               method: normalizePaymentMethod(p.method, 'cash'),
+              ...(typeof p.reason === 'string' && !p.cancelledReason
+                ? { cancelledReason: p.reason }
+                : {}),
+              ...(typeof p.cancelledReason === 'string' && !p.reason
+                ? { reason: p.cancelledReason }
+                : {}),
             }
           : p,
       )
@@ -141,6 +154,8 @@ export function validateBusinessDay(item: unknown): BusinessDay | null {
     closingCash: typeof item.closingCash === 'number' ? item.closingCash : undefined,
     expectedCash: typeof item.expectedCash === 'number' ? item.expectedCash : undefined,
     cashDifference: typeof item.cashDifference === 'number' ? item.cashDifference : undefined,
+    cashDifferenceNote: typeof item.cashDifferenceNote === 'string' ? item.cashDifferenceNote : undefined,
+    usedExpectedCash: typeof item.usedExpectedCash === 'boolean' ? item.usedExpectedCash : undefined,
     note: typeof item.note === 'string' ? item.note : undefined,
     closeNote: typeof item.closeNote === 'string' ? item.closeNote : undefined,
     report: isObject(item.report) ? (item.report as any) : undefined,
@@ -199,13 +214,20 @@ export function validateRefund(item: unknown): Refund | null {
     orderId: typeof item.orderId === 'string' ? item.orderId : undefined,
     tableId: typeof item.tableId === 'string' ? item.tableId : undefined,
     tableName: typeof item.tableName === 'string' ? item.tableName : undefined,
+    orderItemId: typeof item.orderItemId === 'string' ? item.orderItemId : undefined,
+    productName: typeof item.productName === 'string' ? item.productName : undefined,
+    quantity: typeof item.quantity === 'number' ? item.quantity : undefined,
+    unitPrice: typeof item.unitPrice === 'number' ? item.unitPrice : undefined,
     amount: Math.max(0, item.amount),
     paymentMethod:
       typeof item.paymentMethod === 'string' && item.paymentMethod.trim()
         ? normalizePaymentMethod(item.paymentMethod, 'cash')
         : undefined,
     paymentReceived: typeof item.paymentReceived === 'boolean' ? item.paymentReceived : undefined,
+    paymentMovementId: typeof item.paymentMovementId === 'string' ? item.paymentMovementId : undefined,
     reason: typeof item.reason === 'string' ? item.reason : 'İade',
+    createdAt: typeof item.createdAt === 'string' ? item.createdAt : undefined,
+    createdBy: typeof item.createdBy === 'string' ? item.createdBy : undefined,
     refundedAt: typeof item.refundedAt === 'string' ? item.refundedAt : undefined,
     refundedBy: typeof item.refundedBy === 'string' ? item.refundedBy : undefined,
     items: Array.isArray(item.items) ? item.items : undefined,
@@ -300,6 +322,46 @@ export function validateUsers(data: unknown): User[] | null {
   return validated
 }
 
+export function validateCashMovement(item: unknown): CashMovement | null {
+  if (!isObject(item)) return null
+  if (typeof item.id !== 'string' || !item.id.trim()) return null
+  if (typeof item.businessDayId !== 'string' || !item.businessDayId.trim()) return null
+  if (item.type !== 'GIRIS' && item.type !== 'CIKIS') return null
+  if (typeof item.amount !== 'number' || !Number.isFinite(item.amount) || item.amount <= 0) {
+    return null
+  }
+  if (typeof item.category !== 'string' || !item.category.trim()) return null
+  if (typeof item.description !== 'string') return null
+  if (typeof item.createdAt !== 'string' || !item.createdAt.trim()) return null
+  if (typeof item.createdBy !== 'string' || !item.createdBy.trim()) return null
+
+  return {
+    id: item.id.trim(),
+    businessDayId: item.businessDayId.trim(),
+    type: item.type,
+    amount: item.amount,
+    category: item.category.trim(),
+    description: item.description,
+    createdAt: item.createdAt,
+    createdBy: item.createdBy,
+    ...(typeof item.userId === 'string' && item.userId.trim() ? { userId: item.userId } : {}),
+    ...(item.cancelled ? { cancelled: true } : {}),
+    ...(typeof item.cancelledAt === 'string' ? { cancelledAt: item.cancelledAt } : {}),
+    ...(typeof item.cancelledBy === 'string' ? { cancelledBy: item.cancelledBy } : {}),
+    ...(typeof item.cancelledReason === 'string' ? { cancelledReason: item.cancelledReason } : {}),
+  }
+}
+
+export function validateCashMovements(data: unknown): CashMovement[] | null {
+  if (!Array.isArray(data)) return null
+  const validated: CashMovement[] = []
+  for (const item of data) {
+    const mov = validateCashMovement(item)
+    if (mov) validated.push(mov)
+  }
+  return validated
+}
+
 /**
  * Validates a complete backup payload file.
  */
@@ -357,6 +419,9 @@ export function validateBackupFileStructure(fileContent: unknown): {
   }
   if (!isObject(data.appSettings)) {
     return { valid: false, error: 'Yedek içindeki "appSettings" verisi geçersiz.' }
+  }
+  if (data.cashMovements !== undefined && !Array.isArray(data.cashMovements)) {
+    return { valid: false, error: 'Yedek içindeki "cashMovements" verisi geçersiz.' }
   }
 
   // Check ID uniqueness in critical collections

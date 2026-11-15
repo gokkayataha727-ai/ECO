@@ -2,6 +2,7 @@ import type {
   ActivityLog,
   AppSettings,
   BusinessDay,
+  CashMovement,
   CompletedOrder,
   Product,
   Refund,
@@ -25,6 +26,7 @@ import {
   validateActivityLog,
   validateBackupFileStructure,
   validateBusinessDay,
+  validateCashMovement,
   validateCompletedOrder,
   validateMenuProduct,
   validateRefund,
@@ -182,6 +184,7 @@ export function extractAndValidateLocalStorageData(): {
     'menuProducts',
     'appSettings',
     'refunds',
+    'cashMovements',
     'activityLogs',
     'appUsers',
   ]
@@ -226,6 +229,13 @@ export function extractAndValidateLocalStorageData(): {
   const refunds = readAndValidateCollection<Refund>(
     'refunds',
     validateRefund,
+    [],
+    quarantinedKeys,
+  )
+
+  const cashMovements = readAndValidateCollection<CashMovement>(
+    'cashMovements',
+    validateCashMovement,
     [],
     quarantinedKeys,
   )
@@ -310,6 +320,7 @@ export function extractAndValidateLocalStorageData(): {
       menuProducts,
       appSettings,
       refunds,
+      cashMovements,
       activityLogs,
       appUsers,
       initialWaitstaffPins,
@@ -357,6 +368,7 @@ function deduplicatePayloadIds(
     businessDays: dedup(payload.businessDays, 'businessDays'),
     menuProducts: dedup(payload.menuProducts, 'menuProducts'),
     refunds: dedup(payload.refunds, 'refunds'),
+    cashMovements: payload.cashMovements ? dedup(payload.cashMovements, 'cashMovements') : [],
     activityLogs: dedup(payload.activityLogs, 'activityLogs'),
     appUsers: dedup(payload.appUsers, 'appUsers'),
   }

@@ -43,6 +43,7 @@ import {
 } from '../lib/storage'
 import { exportErrorLogsToFile } from '../lib/systemHealth'
 import { getLastChainVerificationResult } from '../lib/activityLog'
+import { getPermissionTemplate, savePermissionTemplate } from '../lib/permissions'
 
 interface SettingsModalProps {
   isOpen: boolean
@@ -808,6 +809,36 @@ export function SettingsModal({
                       />
                       <span className="text-xs text-stone-700 dark:text-stone-300 font-medium">
                         Kasiyer kapatılmış adisyonu geri açabilsin
+                      </span>
+                    </label>
+
+                    <label className="flex items-center gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        data-testid="settings-allow-waiter-cash-movement"
+                        checked={Boolean(
+                          formData.allowWaiterCashMovement ??
+                            getPermissionTemplate(formData).cash_movement_manage,
+                        )}
+                        onChange={(e) => {
+                          const checked = e.target.checked
+                          const updated = { ...formData, allowWaiterCashMovement: checked }
+                          setFormData(updated)
+                          onUpdateSettings(updated)
+                          const tpl = getPermissionTemplate(updated)
+                          savePermissionTemplate(
+                            { ...tpl, cash_movement_manage: checked },
+                            {
+                              id: currentSession?.userId,
+                              fullName: currentSession?.fullName || 'Yönetici',
+                              role: currentSession?.role,
+                            },
+                          )
+                        }}
+                        className="rounded border-stone-300 text-amber-600 focus:ring-amber-500 w-4 h-4 cursor-pointer"
+                      />
+                      <span className="text-xs text-stone-700 dark:text-stone-300 font-medium">
+                        Garson kasaya para giriş/çıkış hareketi yapabilsin
                       </span>
                     </label>
                   </div>

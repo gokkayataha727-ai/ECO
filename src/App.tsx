@@ -9,16 +9,20 @@ import { LogoSettingsModal } from './components/LogoSettingsModal'
 import { SettingsModal } from './components/SettingsModal'
 import { SplashScreen } from './components/SplashScreen'
 import {
+  calculateRefundAmounts,
   calculateTotals,
+  derivePaymentState,
+  deriveTableStatus,
   formatCurrency,
-  getEffectivePrice,
   isTableOccupied,
+  isValidPaymentMovement,
   mergeTablesOrder,
   moveTableOrder,
   normalizeOrderPaymentMethod,
   normalizePaymentMethod,
   roundCurrency,
   splitTableOrder,
+  toKurus,
   type SplitItemSelection,
 } from './lib/format'
 import { getProducts, saveProduct as apiSaveProduct, deleteProductApi, updateCustomerDisplay, isElectronEnvironment } from './lib/api'
@@ -32,6 +36,7 @@ import type {
   SelectedOption,
   AppSettings,
   BusinessDay,
+  CashMovement,
   Refund,
 } from './types'
 import { ProductManager } from './components/ProductManager'
@@ -44,8 +49,15 @@ import { TableOrderView } from './components/TableOrderView'
 import { OpenDayModal, type OpenDayParams } from './components/OpenDayModal'
 import { CloseDayModal } from './components/CloseDayModal'
 import {
+  CashMovementModal,
+  type CashMovementActionResult,
+  type CashMovementFormValues,
+} from './components/CashMovementModal'
+import {
   executeOrderReopen,
+  getOpenBusinessDayDurationAlert,
   healCorruptedReopenedData,
+  repairGhostOccupiedTables,
   saveStoredRefund,
 } from './lib/businessDay'
 import {
@@ -75,6 +87,8 @@ import {
   saveCompletedOrdersSafe,
   getBusinessDaysSafe,
   saveBusinessDaysSafe,
+  getCashMovementsSafe,
+  saveCashMovementsSafe,
   getMenuProductsSafe,
   saveMenuProductsSafe,
   getSettingsSafe,
@@ -153,6 +167,26 @@ function App() {
   useEffect(() => {
     const handlePermissionsUpdated = () => {
       setPermissionVersion((v) => v + 1)
+      try {
+        const latest = getSettingsSafe()
+        setSettings((prev) => {
+          if (
+            prev.allowWaiterRefund === latest.allowWaiterRefund &&
+            prev.allowWaiterDayManagement === latest.allowWaiterDayManagement &&
+            prev.allowWaiterReopen === latest.allowWaiterReopen &&
+            prev.allowWaiterCashMovement === latest.allowWaiterCashMovement
+          ) {
+            return prev
+          }
+          return {
+            ...prev,
+            allowWaiterRefund: latest.allowWaiterRefund,
+            allowWaiterDayManagement: latest.allowWaiterDayManagement,
+            allowWaiterReopen: latest.allowWaiterReopen,
+            allowWaiterCashMovement: latest.allowWaiterCashMovement,
+          }
+        })
+      } catch {}
     }
     window.addEventListener('permissions-updated', handlePermissionsUpdated)
     return () => window.removeEventListener('permissions-updated', handlePermissionsUpdated)
@@ -172,15 +206,26 @@ function App() {
       const currentTables = getTablesSafe()
       const currentOrders = getCompletedOrdersSafe()
       const healRes = healCorruptedReopenedData(currentTables, currentOrders)
-      if (healRes.healed) {
+      const ghostRes = repairGhostOccupiedTables(healRes.tables)
+      if (healRes.healed || ghostRes.healed) {
+        if (ghostRes.healed) {
+          const names = ghostRes.repairedTables.map((t) => `${t.name} (${t.id})`).join(', ')
+          const msg = `Hayalet dolu masa onarıldı (boş masaya çekildi): ${names}`
+          console.warn(`[Table Repair] ${msg}`)
+          recordSystemLog('warn', 'GHOST_TABLE_REPAIRED', msg, {
+            repairedTables: ghostRes.repairedTables,
+          })
+        }
         try {
           const backup = createFullBackupFile('Geri açma veri modeli migrasyon ve onarım yedeği')
           localStorage.setItem('storage_pre_reopen_heal_backup', JSON.stringify(backup))
         } catch {}
-        saveTablesSafe(healRes.tables)
-        saveCompletedOrdersSafe(healRes.completedOrders)
-        setTables(healRes.tables)
-        setCompletedOrders(healRes.completedOrders)
+        saveTablesSafe(ghostRes.tables)
+        if (healRes.healed) {
+          saveCompletedOrdersSafe(healRes.completedOrders)
+          setCompletedOrders(healRes.completedOrders)
+        }
+        setTables(ghostRes.tables)
       }
       cleanupSpuriousDiscountLogs()
       verifyChainAndReport({ logIfBroken: true })
@@ -266,6 +311,7 @@ function App() {
             setTables(getTablesSafe())
             setCompletedOrders(getCompletedOrdersSafe())
             setBusinessDays(getBusinessDaysSafe())
+            setCashMovements(getCashMovementsSafe())
             setMenuProducts(getMenuProductsSafe())
             setSettings(getSettingsSafe())
           } else if (!res.success && res.error) {
@@ -465,6 +511,12 @@ function App() {
     saveBusinessDaysSafe(businessDays)
   }, [businessDays])
 
+  const [cashMovements, setCashMovements] = useState<CashMovement[]>(() => getCashMovementsSafe())
+
+  useEffect(() => {
+    saveCashMovementsSafe(cashMovements)
+  }, [cashMovements])
+
   const openBusinessDay = useMemo(
     () => businessDays.find((d) => d.status === 'open') || null,
     [businessDays],
@@ -512,6 +564,7 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isOpenDayModalOpen, setIsOpenDayModalOpen] = useState(false)
   const [isCloseDayModalOpen, setIsCloseDayModalOpen] = useState(false)
+  const [isCashMovementModalOpen, setIsCashMovementModalOpen] = useState(false)
   const [dayBlockedPromptOpen, setDayBlockedPromptOpen] = useState(false)
   const [reportSelectedDayId, setReportSelectedDayId] = useState<string | null>(null)
   const [optionModalProduct, setOptionModalProduct] = useState<Product | null>(null)
@@ -628,17 +681,17 @@ function App() {
         businessDayId: closedDay.id,
         type: 'day_close',
         amount: closedDay.closingCash,
-        reason: closedDay.note,
+        reason: closedDay.cashDifferenceNote || closedDay.closeNote || closedDay.note,
         userName: cashierName,
         userRole,
         userId: activeUserId,
-        details: `İş günü kapatıldı. Kapanış Nakit: ${formatCurrency(closedDay.closingCash || 0)}, POS Z: ${formatCurrency(closedDay.enteredZ || 0)}`,
+        details: `İş günü kapatıldı. Kapanış Nakit: ${formatCurrency(closedDay.closingCash || 0)}, Beklenen: ${formatCurrency(closedDay.expectedCash || 0)}, Fark: ${formatCurrency(closedDay.cashDifference || 0)}, POS Z: ${formatCurrency(closedDay.enteredZ || 0)}${closedDay.usedExpectedCash ? ' [Beklenen tutar kullanıldı]' : ''}${closedDay.cashDifferenceNote ? ` | Fark Açıklaması: ${closedDay.cashDifferenceNote}` : ''}`,
       })
 
       // Gün sonu kapatılırken otomatik "günlük" yedek al
       triggerAutomatedBackup('gunluk').catch(() => {})
     },
-    [activeUserName, activeUserRole, activeUserId, session, currentUser, settings],
+    [tables, activeUserName, activeUserRole, activeUserId, session, currentUser, settings],
   )
 
   const handleEditProduct = useCallback((product: Product) => {
@@ -755,6 +808,128 @@ function App() {
     setIsCloseDayModalOpen(true)
   }, [session, currentUser, settings])
 
+  const handleOpenCashMovementModalTrigger = useCallback(() => {
+    if (!can(session || currentUser, 'cash_movement_manage', settings)) {
+      logUnauthorizedAttempt(session || currentUser, 'cash_movement_manage', openBusinessDay?.id)
+      setDeniedActionName('Kasa Giriş/Çıkış Hareketi')
+      setPermissionDeniedModalOpen(true)
+      return
+    }
+    setIsCashMovementModalOpen(true)
+  }, [session, currentUser, settings, openBusinessDay])
+
+  const handleAddCashMovement = useCallback(
+    (values: CashMovementFormValues): CashMovementActionResult => {
+      if (!can(session || currentUser, 'cash_movement_manage', settings)) {
+        logUnauthorizedAttempt(session || currentUser, 'cash_movement_manage', openBusinessDay?.id)
+        setDeniedActionName('Kasa Giriş/Çıkış Hareketi')
+        setPermissionDeniedModalOpen(true)
+        return { ok: false, error: 'Kasa hareketi kaydetme yetkiniz yok.' }
+      }
+      if (!openBusinessDay || openBusinessDay.status !== 'open') {
+        return { ok: false, error: 'Açık iş günü olmadan kasa hareketi kaydedilemez.' }
+      }
+      const roundedAmount = roundCurrency(values.amount)
+      if (!Number.isFinite(roundedAmount) || toKurus(roundedAmount) <= 0) {
+        return { ok: false, error: 'Geçerli bir tutar girilmelidir.' }
+      }
+      const trimmedDesc = values.description.trim()
+      if (trimmedDesc.length < 3) {
+        return { ok: false, error: 'Açıklama en az 3 karakter olmalıdır.' }
+      }
+      const category = values.category.trim() || 'Diğer'
+      const newMovement: CashMovement = {
+        id: generateUUID(),
+        businessDayId: openBusinessDay.id,
+        type: values.type,
+        amount: roundedAmount,
+        category,
+        description: trimmedDesc,
+        createdAt: new Date().toISOString(),
+        createdBy: activeUserName,
+        userId: activeUserId,
+      }
+      setCashMovements((prev) => {
+        const next = [newMovement, ...prev]
+        saveCashMovementsSafe(next)
+        return next
+      })
+      logActivity({
+        businessDayId: openBusinessDay.id,
+        type: 'cash_movement_add',
+        amount: roundedAmount,
+        reason: category,
+        newValue: values.type,
+        userName: activeUserName,
+        userRole: activeUserRole,
+        userId: activeUserId,
+        details: `${values.type === 'GIRIS' ? 'Kasaya giriş' : 'Kasadan çıkış'}: ${formatCurrency(roundedAmount)} · ${category} — ${trimmedDesc}`,
+      })
+      return { ok: true }
+    },
+    [session, currentUser, settings, openBusinessDay, activeUserName, activeUserRole, activeUserId],
+  )
+
+  const handleCancelCashMovement = useCallback(
+    (movementId: string, reason: string): CashMovementActionResult => {
+      if (!can(session || currentUser, 'cash_movement_manage', settings)) {
+        logUnauthorizedAttempt(session || currentUser, 'cash_movement_manage', openBusinessDay?.id)
+        setDeniedActionName('Kasa Hareketi İptali')
+        setPermissionDeniedModalOpen(true)
+        return { ok: false, error: 'Kasa hareketini iptal etme yetkiniz yok.' }
+      }
+      if (!openBusinessDay || openBusinessDay.status !== 'open') {
+        return { ok: false, error: 'Gün kapalıyken kasa hareketi iptal edilemez.' }
+      }
+      const trimmedReason = reason.trim()
+      if (trimmedReason.length < 3) {
+        return { ok: false, error: 'İptal gerekçesi en az 3 karakter olmalıdır.' }
+      }
+      const target = cashMovements.find((m) => m.id === movementId)
+      if (!target || target.cancelled || target.businessDayId !== openBusinessDay.id) {
+        return { ok: false, error: 'İptal edilecek aktif kasa hareketi bulunamadı.' }
+      }
+      const cancelledAt = new Date().toISOString()
+      setCashMovements((prev) => {
+        const next = prev.map((m) =>
+          m.id === movementId
+            ? {
+                ...m,
+                cancelled: true,
+                cancelledAt,
+                cancelledBy: activeUserName,
+                cancelledReason: trimmedReason,
+              }
+            : m,
+        )
+        saveCashMovementsSafe(next)
+        return next
+      })
+      logActivity({
+        businessDayId: openBusinessDay.id,
+        type: 'cash_movement_cancel',
+        amount: target.amount,
+        reason: trimmedReason,
+        oldValue: target.type,
+        userName: activeUserName,
+        userRole: activeUserRole,
+        userId: activeUserId,
+        details: `Kasa hareketi iptal edildi (${target.type === 'GIRIS' ? 'Giriş' : 'Çıkış'} ${formatCurrency(target.amount)} · ${target.category}): ${trimmedReason}`,
+      })
+      return { ok: true }
+    },
+    [
+      session,
+      currentUser,
+      settings,
+      openBusinessDay,
+      cashMovements,
+      activeUserName,
+      activeUserRole,
+      activeUserId,
+    ],
+  )
+
   const handleResetData = useCallback(() => {
     try {
       const backup = createFullBackupFile('Sıfırlama öncesi otomatik güvenlik yedeği')
@@ -767,6 +942,7 @@ function App() {
     localStorage.removeItem('appSettings')
     localStorage.removeItem('activityLogs')
     localStorage.removeItem('refunds')
+    localStorage.removeItem('cashMovements')
     localStorage.removeItem('demoTables')
     localStorage.removeItem('demoCompletedOrders')
     localStorage.removeItem('demoMenuProducts')
@@ -861,7 +1037,7 @@ function App() {
           return {
             ...t,
             cart: newCart,
-            status: newCart.some((i) => i.status !== 'refunded') ? 'occupied' : 'empty',
+            status: deriveTableStatus({ ...t, cart: newCart }),
           }
         })
       )
@@ -936,7 +1112,13 @@ function App() {
       return
     }
     if (activeTableId) {
-      setTables((current) => current.map((t) => t.id === activeTableId ? { ...t, customerName: name } : t))
+      setTables((current) =>
+        current.map((t) =>
+          t.id === activeTableId
+            ? { ...t, customerName: name, status: deriveTableStatus({ ...t, customerName: name }) }
+            : t,
+        ),
+      )
     }
   }, [activeTableId, session, currentUser, settings])
 
@@ -1587,6 +1769,8 @@ function App() {
     // 2. Geçmiş iş günlerini ve Z raporlarını temizle
     setBusinessDays([])
     localStorage.removeItem('businessDays')
+    setCashMovements([])
+    saveCashMovementsSafe([])
 
     // 3. Masalardaki açık siparişleri ve bakiyeleri temizle
     setTables((current) =>
@@ -1767,11 +1951,15 @@ function App() {
 
       if (activeTableId) {
         setTables((current) =>
-          current.map((t) =>
-            t.id === activeTableId
-              ? { ...t, payments: [...(t.payments || []), paymentWithDay] }
-              : t,
-          ),
+          current.map((t) => {
+            if (t.id !== activeTableId) return t
+            const nextPayments = [...(t.payments || []), paymentWithDay]
+            return {
+              ...t,
+              payments: nextPayments,
+              status: deriveTableStatus({ ...t, payments: nextPayments }),
+            }
+          }),
         )
       } else {
         setDirectPayments((current) => [...current, paymentWithDay])
@@ -1790,18 +1978,182 @@ function App() {
   )
 
   const handleUndoLastPayment = useCallback(() => {
+    const nowIso = new Date().toISOString()
+    const currentPayments = activeTable ? activeTable.payments || [] : directPayments
+
+    let lastValidIdx = -1
+    for (let i = currentPayments.length - 1; i >= 0; i--) {
+      const p = currentPayments[i]
+      if ((p.status || 'GECERLI') === 'GECERLI' && (p.type || 'ODEME') === 'ODEME') {
+        lastValidIdx = i
+        break
+      }
+    }
+
+    if (lastValidIdx < 0) return
+
+    const targetPayment = currentPayments[lastValidIdx]
+    const methodCode = normalizePaymentMethod(targetPayment.method, 'cash')
+    const methodLabelText =
+      methodCode === 'card' ? 'KART' : methodCode === 'iban' ? 'IBAN' : 'NAKİT'
+    const cancelReason =
+      methodCode === 'cash'
+        ? 'Son ödeme geri alındı (Nakit kasadan iade/iptal onayı alındı)'
+        : 'Son ödeme geri alındı'
+
+    const markLastValidAsCancelled = (list: PartialPayment[]): PartialPayment[] => {
+      let idx = -1
+      for (let i = list.length - 1; i >= 0; i--) {
+        const p = list[i]
+        if ((p.status || 'GECERLI') === 'GECERLI' && (p.type || 'ODEME') === 'ODEME') {
+          idx = i
+          break
+        }
+      }
+      if (idx < 0) return list
+      return list.map((p, i) =>
+        i === idx
+          ? {
+              ...p,
+              type: p.type || 'ODEME',
+              status: 'IPTAL' as const,
+              cancelledAt: nowIso,
+              cancelledBy: activeUserName,
+              cancelledReason: cancelReason,
+              reason: 'Son ödeme geri alındı',
+            }
+          : p,
+      )
+    }
+
     if (activeTableId) {
       setTables((current) =>
-        current.map((t) =>
-          t.id === activeTableId
-            ? { ...t, payments: (t.payments || []).slice(0, -1) }
-            : t
-        )
+        current.map((t) => {
+          if (t.id !== activeTableId) return t
+          const nextPayments = markLastValidAsCancelled(t.payments || [])
+          return {
+            ...t,
+            payments: nextPayments,
+            status: deriveTableStatus({ ...t, payments: nextPayments }),
+          }
+        }),
       )
     } else {
-      setDirectPayments((current) => current.slice(0, -1))
+      setDirectPayments((current) => markLastValidAsCancelled(current))
     }
-  }, [activeTableId])
+
+    logActivity({
+      businessDayId: openBusinessDay?.id,
+      type: 'payment_cancel',
+      tableName: activeTable?.name,
+      tableId: activeTable?.id,
+      amount: roundCurrency(targetPayment.amount),
+      reason: 'Son ödeme geri alındı',
+      userName: activeUserName,
+      userRole: activeUserRole,
+      userId: activeUserId,
+      details: `Son ödeme geri alındı (IPTAL): ${methodLabelText} ile ${formatCurrency(targetPayment.amount)}${
+        methodCode === 'cash' ? ' · Nakit kasadan iade/iptal onaylandı' : ''
+      }`,
+    })
+  }, [
+    activeTableId,
+    activeTable,
+    directPayments,
+    openBusinessDay,
+    activeUserName,
+    activeUserRole,
+    activeUserId,
+  ])
+
+  const handleRefundOverpayment = useCallback(
+    (refundMethod: 'card' | 'cash' | 'iban', overpaymentAmount: number) => {
+      const cleanAmount = roundCurrency(overpaymentAmount)
+      if (cleanAmount <= 0) return
+
+      const nowIso = new Date().toISOString()
+      const normalizedMethod = normalizePaymentMethod(refundMethod, 'cash')
+      const currentPayments = activeTable ? activeTable.payments || [] : directPayments
+      const validOdemeler = currentPayments.filter(
+        (p) => isValidPaymentMovement(p) && p.type !== 'IADE',
+      )
+      const matchedOdeme =
+        [...validOdemeler]
+          .reverse()
+          .find((p) => normalizePaymentMethod(p.method, 'cash') === normalizedMethod) ||
+        validOdemeler[validOdemeler.length - 1]
+
+      const iadeMovement: PartialPayment = {
+        id: generateUUID(),
+        type: 'IADE',
+        status: 'GECERLI',
+        method: normalizedMethod,
+        amount: cleanAmount,
+        createdAt: nowIso,
+        tableId: activeTable?.id,
+        tableName: activeTable?.name,
+        businessDayId: openBusinessDay?.id,
+        cashier: activeUserName,
+        userId: activeUserId,
+        reversalOfId: matchedOdeme?.id,
+        reason: 'Fazla ödeme iadesi',
+        cancelledReason: 'Fazla ödeme iadesi',
+      }
+
+      const refundRecord: Refund = {
+        id: generateUUID(),
+        businessDayId: openBusinessDay?.id,
+        tableId: activeTable?.id,
+        tableName: activeTable?.name,
+        amount: cleanAmount,
+        reason: 'Fazla ödeme iadesi',
+        paymentMethod: normalizedMethod,
+        paymentReceived: true,
+        paymentMovementId: iadeMovement.id,
+        refundedAt: nowIso,
+        refundedBy: activeUserName,
+      }
+      saveStoredRefund(refundRecord)
+
+      if (activeTableId) {
+        setTables((current) =>
+          current.map((t) => {
+            if (t.id !== activeTableId) return t
+            const nextPayments = [...(t.payments || []), iadeMovement]
+            return {
+              ...t,
+              payments: nextPayments,
+              status: deriveTableStatus({ ...t, payments: nextPayments }),
+            }
+          }),
+        )
+      } else {
+        setDirectPayments((current) => [...current, iadeMovement])
+      }
+
+      logActivity({
+        businessDayId: openBusinessDay?.id,
+        type: 'item_refund',
+        tableName: activeTable?.name,
+        tableId: activeTable?.id,
+        amount: cleanAmount,
+        reason: 'Fazla ödeme iadesi',
+        userName: activeUserName,
+        userRole: activeUserRole,
+        userId: activeUserId,
+        details: `Fazla ödeme iade edildi (${normalizedMethod.toUpperCase()}): ${formatCurrency(cleanAmount)}`,
+      })
+    },
+    [
+      activeTableId,
+      activeTable,
+      directPayments,
+      openBusinessDay,
+      activeUserName,
+      activeUserRole,
+      activeUserId,
+    ],
+  )
 
   // Refund Handlers
   const handleOpenItemRefund = useCallback(
@@ -1853,49 +2205,144 @@ function App() {
         if (!targetTable) return
 
         const activeItems = targetTable.cart.filter((i) => i.status !== 'refunded')
-        const totalAmount = activeItems.reduce(
-          (sum, i) => sum + getEffectivePrice(i) * (i.quantity - (i.refundedQty || 0)),
-          0,
-        )
+        const tableRefundBreakdown = calculateRefundAmounts({
+          cart: targetTable.cart,
+          discountRate: targetTable.discountRate || 0,
+          discountAmount: targetTable.discountAmount || 0,
+          isTableRefund: true,
+        })
+        const totalAmount = tableRefundBreakdown.netAmount
+        const grossAmount = tableRefundBreakdown.grossAmount
 
-        // Open-table full refund: the table and any partial payments on it are cleared without
-        // ever creating a CompletedOrder, so paymentReceived is false to prevent deducting from
-        // other closed tables' revenue.
+        const currentTablePayments = targetTable.payments || []
+        const targetTableTotals = calculateTotals(
+          targetTable.cart,
+          targetTable.discountRate || 0,
+          targetTable.discountAmount || 0,
+        )
+        const { paidTotal: currentPaidTotal } = derivePaymentState(
+          targetTableTotals.total,
+          currentTablePayments,
+        )
+        const hasCollectedMoney = currentPaidTotal > 0 && Boolean(params.paymentMethod)
+        const normalizedRefundMethod = hasCollectedMoney
+          ? normalizePaymentMethod(params.paymentMethod, 'cash')
+          : undefined
+
+        let iadeMovement: PartialPayment | undefined
+        if (hasCollectedMoney && normalizedRefundMethod) {
+          const validOdemeler = currentTablePayments.filter(
+            (p) => isValidPaymentMovement(p) && p.type !== 'IADE',
+          )
+          const matchedOdeme =
+            [...validOdemeler]
+              .reverse()
+              .find((p) => normalizePaymentMethod(p.method, 'cash') === normalizedRefundMethod) ||
+            validOdemeler[validOdemeler.length - 1]
+
+          iadeMovement = {
+            id: generateUUID(),
+            type: 'IADE',
+            status: 'GECERLI',
+            method: normalizedRefundMethod,
+            amount: roundCurrency(currentPaidTotal),
+            createdAt: nowIso,
+            tableId: targetTable.id,
+            tableName: targetTable.name,
+            businessDayId: openBusinessDay?.id,
+            cashier: userName,
+            userId,
+            reversalOfId: matchedOdeme?.id,
+            reason: params.reason,
+            cancelledReason: params.reason,
+          }
+        }
+
         const refundRecord: Refund = {
           id: generateUUID(),
           businessDayId: openBusinessDay?.id,
           tableId: targetTable.id,
           tableName: targetTable.name,
-          amount: roundCurrency(totalAmount),
+          grossAmount,
+          amount: totalAmount,
           reason: params.reason,
-          paymentMethod: params.paymentMethod,
-          paymentReceived: false,
+          paymentMethod: normalizedRefundMethod,
+          paymentReceived: hasCollectedMoney,
+          paymentMovementId: iadeMovement?.id,
           refundedAt: nowIso,
           refundedBy: userName,
-          items: activeItems.map((i) => ({
-            productId: i.id,
-            name: i.name,
-            quantity: i.quantity - (i.refundedQty || 0),
-            unitPrice: getEffectivePrice(i),
-            totalPrice: roundCurrency(getEffectivePrice(i) * (i.quantity - (i.refundedQty || 0))),
+          items: tableRefundBreakdown.itemDetails.map((d) => ({
+            productId: d.productId,
+            name: d.name,
+            quantity: d.quantity,
+            unitPrice: d.unitPrice,
+            totalPrice: d.totalPrice,
           })),
         }
         saveStoredRefund(refundRecord)
+
+        // If the table had any payment movements, archive them in a cancelled CompletedOrder
+        // so no payment record is ever deleted when the table is cleared for the next customer.
+        if (currentTablePayments.length > 0) {
+          const archivedOrderId = generateUUID()
+          const preservedMovements = [
+            ...currentTablePayments,
+            ...(iadeMovement ? [iadeMovement] : []),
+          ].map((p) => ({
+            ...p,
+            orderId: archivedOrderId,
+            tableId: p.tableId ?? targetTable.id,
+            tableName: p.tableName ?? targetTable.name,
+            businessDayId: p.businessDayId ?? openBusinessDay?.id,
+          }))
+          const archivedCancelledOrder: CompletedOrder = {
+            id: archivedOrderId,
+            orderNumber: targetTable.name,
+            tableId: targetTable.id,
+            tableName: targetTable.name,
+            items: targetTable.cart.map((c) => ({
+              ...c,
+              status: 'refunded' as const,
+              refundedQty: c.quantity,
+              refundReason: params.reason,
+              refundedAt: nowIso,
+              refundedBy: userName,
+            })),
+            totals: {
+              subtotal: grossAmount,
+              discount: targetTableTotals.discount,
+              total: 0,
+            },
+            discountRate: targetTable.discountRate || 0,
+            discountAmount: targetTable.discountAmount || 0,
+            taxRate: settings.taxRate,
+            paymentMethod: normalizedRefundMethod || 'cash',
+            payments: preservedMovements,
+            date: nowIso,
+            note: targetTable.note,
+            customerName: targetTable.customerName || undefined,
+            cashier: userName,
+            businessDayId: openBusinessDay?.id,
+            cancelled: true,
+            cancelledAt: nowIso,
+          }
+          setCompletedOrders((prev) => [archivedCancelledOrder, ...prev])
+        }
 
         logActivity({
           businessDayId: openBusinessDay?.id,
           type: 'table_refund',
           tableName: targetTable.name,
           tableId: targetTable.id,
-          amount: roundCurrency(totalAmount),
+          amount: totalAmount,
           reason: params.reason,
           userName,
           userRole,
           userId,
-          details: `${targetTable.name} masası tamamen iade edildi. Tutar: ${formatCurrency(totalAmount)}. Neden: ${params.reason}`,
+          details: `${targetTable.name} masası tamamen iade edildi (${activeItems.length} kalem). Tutar (Net): ${formatCurrency(totalAmount)}${grossAmount !== totalAmount ? ` (Brüt: ${formatCurrency(grossAmount)})` : ''}. Neden: ${params.reason}`,
         })
 
-        // Clear table completely after full table refund (refund details are stored in refunds & activity logs)
+        // Clear table after full table refund
         setTables((current) =>
           current.map((t) =>
             t.id === targetTable.id
@@ -1928,21 +2375,75 @@ function App() {
         }
       } else if (refundItemTarget) {
         const item = refundItemTarget
-        const unitPrice = getEffectivePrice(item)
-        const refundAmount = roundCurrency(unitPrice * params.qty)
+        const currentCart = activeTable ? activeTable.cart : directCart
+        const currentDiscountRate = activeTable ? (activeTable.discountRate || 0) : directDiscountRate
+        const currentDiscountAmount = activeTable ? (activeTable.discountAmount || 0) : directDiscountAmount
+        const itemRefundBreakdown = calculateRefundAmounts({
+          cart: currentCart,
+          discountRate: currentDiscountRate,
+          discountAmount: currentDiscountAmount,
+          item,
+          qty: params.qty,
+          isTableRefund: false,
+        })
+        const unitPrice = itemRefundBreakdown.unitNetPrice
+        const refundAmount = itemRefundBreakdown.netAmount
+        const grossAmount = itemRefundBreakdown.grossAmount
 
-        // Open-table item refund: the item is marked 'refunded' in the open table's cart,
-        // which immediately reduces the table's payable total before order completion.
-        // Setting paymentReceived: false prevents double-deducting from completed orders' revenue.
+        const currentPayments = activeTable ? activeTable.payments || [] : directPayments
+        const { paidTotal: currentPaidTotal } = derivePaymentState(totals.total, currentPayments)
+        const hasCollectedMoney = currentPaidTotal > 0 && Boolean(params.paymentMethod)
+        const normalizedRefundMethod = hasCollectedMoney
+          ? normalizePaymentMethod(params.paymentMethod, 'cash')
+          : undefined
+        const refundMovementAmount = hasCollectedMoney
+          ? roundCurrency(Math.min(refundAmount, currentPaidTotal))
+          : 0
+
+        let iadeMovement: PartialPayment | undefined
+        if (hasCollectedMoney && normalizedRefundMethod && refundMovementAmount > 0) {
+          const validOdemeler = currentPayments.filter(
+            (p) => isValidPaymentMovement(p) && p.type !== 'IADE',
+          )
+          const matchedOdeme =
+            [...validOdemeler]
+              .reverse()
+              .find((p) => normalizePaymentMethod(p.method, 'cash') === normalizedRefundMethod) ||
+            validOdemeler[validOdemeler.length - 1]
+
+          iadeMovement = {
+            id: generateUUID(),
+            type: 'IADE',
+            status: 'GECERLI',
+            method: normalizedRefundMethod,
+            amount: refundMovementAmount,
+            createdAt: nowIso,
+            tableId: activeTable?.id,
+            tableName: activeTable?.name,
+            businessDayId: openBusinessDay?.id,
+            cashier: userName,
+            userId,
+            reversalOfId: matchedOdeme?.id,
+            reason: params.reason,
+            cancelledReason: params.reason,
+          }
+        }
+
         const refundRecord: Refund = {
           id: generateUUID(),
           businessDayId: openBusinessDay?.id,
           tableId: activeTable?.id,
           tableName: activeTable?.name,
+          orderItemId: item.cartItemId,
+          productName: item.name,
+          quantity: params.qty,
+          unitPrice,
+          grossAmount,
           amount: refundAmount,
           reason: params.reason,
-          paymentMethod: params.paymentMethod,
-          paymentReceived: false,
+          paymentMethod: normalizedRefundMethod,
+          paymentReceived: hasCollectedMoney,
+          paymentMovementId: iadeMovement?.id,
           refundedAt: nowIso,
           refundedBy: userName,
           items: [
@@ -1968,7 +2469,7 @@ function App() {
           userName,
           userRole,
           userId,
-          details: `${item.name} (${params.qty} adet) iade edildi. Tutar: ${formatCurrency(refundAmount)}. Neden: ${params.reason}`,
+          details: `${item.name} (${params.qty} adet) iade edildi. Tutar (Net): ${formatCurrency(refundAmount)}${grossAmount !== refundAmount ? ` (Brüt: ${formatCurrency(grossAmount)})` : ''}. Neden: ${params.reason}`,
         })
 
         const buildUpdatedCart = (current: CartItem[]): CartItem[] =>
@@ -1988,14 +2489,31 @@ function App() {
                 },
               ]
             }
+            const remainingQty = cartItem.quantity - params.qty
+            const scaledRemainingDiscount =
+              cartItem.itemDiscount && cartItem.itemDiscount.type === 'amount' && cartItem.quantity > 0
+                ? {
+                    ...cartItem.itemDiscount,
+                    value: roundCurrency(cartItem.itemDiscount.value * (remainingQty / cartItem.quantity)),
+                  }
+                : cartItem.itemDiscount
+            const scaledRefundedDiscount =
+              cartItem.itemDiscount && cartItem.itemDiscount.type === 'amount' && cartItem.quantity > 0
+                ? {
+                    ...cartItem.itemDiscount,
+                    value: roundCurrency(cartItem.itemDiscount.value - (scaledRemainingDiscount?.value ?? 0)),
+                  }
+                : cartItem.itemDiscount
             const remainingItem: CartItem = {
               ...cartItem,
-              quantity: cartItem.quantity - params.qty,
+              quantity: remainingQty,
+              ...(scaledRemainingDiscount ? { itemDiscount: scaledRemainingDiscount } : {}),
             }
             const refundedPortion: CartItem = {
               ...cartItem,
               cartItemId: generateUUID(),
               quantity: params.qty,
+              ...(scaledRefundedDiscount ? { itemDiscount: scaledRefundedDiscount } : {}),
               status: 'refunded' as const,
               refundedQty: params.qty,
               refundReason: params.reason,
@@ -2005,37 +2523,27 @@ function App() {
             return [remainingItem, refundedPortion]
           })
 
-        const trimPaymentsToCap = (existingPayments: PartialPayment[], maxCap: number): PartialPayment[] => {
-          let running = 0
-          const result: PartialPayment[] = []
-          for (const p of existingPayments) {
-            if (running >= maxCap) break
-            const allowed = roundCurrency(Math.min(p.amount, maxCap - running))
-            if (allowed > 0) {
-              result.push(allowed === p.amount ? p : { ...p, amount: allowed })
-              running = roundCurrency(running + allowed)
-            }
-          }
-          return result
-        }
-
         if (activeTableId) {
           setTables((current) =>
             current.map((t) => {
               if (t.id !== activeTableId) return t
               const updatedCart = buildUpdatedCart(t.cart)
-              const newTotals = calculateTotals(updatedCart, t.discountRate || 0, t.discountAmount || 0)
-              const cappedPayments = trimPaymentsToCap(t.payments || [], newTotals.total)
+              const updatedPayments = iadeMovement
+                ? [...(t.payments || []), iadeMovement]
+                : t.payments || []
               return {
                 ...t,
                 cart: updatedCart,
-                payments: cappedPayments,
-                status: isTableOccupied({ ...t, cart: updatedCart }) ? 'occupied' : 'empty',
+                payments: updatedPayments,
+                status: deriveTableStatus({ ...t, cart: updatedCart, payments: updatedPayments }),
               }
             }),
           )
         } else {
           updateActiveCart(buildUpdatedCart)
+          if (iadeMovement) {
+            setDirectPayments((current) => [...current, iadeMovement!])
+          }
         }
       }
 
@@ -2048,6 +2556,12 @@ function App() {
       refundItemTarget,
       activeTable,
       activeTableId,
+      directCart,
+      directDiscountRate,
+      directDiscountAmount,
+      directPayments,
+      totals.total,
+      settings.taxRate,
       openBusinessDay,
       activeUserName,
       activeUserRole,
@@ -2345,6 +2859,7 @@ function App() {
                           setTables(getTablesSafe())
                           setCompletedOrders(getCompletedOrdersSafe())
                           setBusinessDays(getBusinessDaysSafe())
+                          setCashMovements(getCashMovementsSafe())
                           setMenuProducts(getMenuProductsSafe())
                           setSettings(getSettingsSafe())
                           setCriticalStorageError(null)
@@ -2359,6 +2874,7 @@ function App() {
                         setTables(getTablesSafe())
                         setCompletedOrders(getCompletedOrdersSafe())
                         setBusinessDays(getBusinessDaysSafe())
+                        setCashMovements(getCashMovementsSafe())
                         setMenuProducts(getMenuProductsSafe())
                         setSettings(getSettingsSafe())
                         setCriticalStorageError(null)
@@ -2407,6 +2923,33 @@ function App() {
           </div>
         )}
 
+        {openBusinessDay && (() => {
+          const durationAlert = getOpenBusinessDayDurationAlert(openBusinessDay)
+          if (!durationAlert) return null
+          return (
+            <div
+              role="status"
+              aria-live="polite"
+              data-testid="open-day-duration-banner"
+              className="mx-4 mt-2 px-4 py-2 rounded-xl bg-amber-50 dark:bg-amber-950/50 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-200 flex items-center justify-between gap-3 text-xs font-semibold shadow-sm"
+            >
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={15} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                <span>{durationAlert.message}</span>
+              </div>
+              {can(session || currentUser, 'day_close', settings) && (
+                <button
+                  type="button"
+                  onClick={handleCloseDayModalTrigger}
+                  className="px-2.5 py-1 rounded-lg bg-amber-200/70 hover:bg-amber-300/70 text-amber-950 font-bold text-[11px] shrink-0 transition-colors"
+                >
+                  Günü Kapat
+                </button>
+              )}
+            </div>
+          )
+        })()}
+
         {view === 'home' ? (
           <HomePage
             completedOrders={completedOrders}
@@ -2417,6 +2960,7 @@ function App() {
             onViewChange={handleViewChange}
             onOpenSummary={handleOpenSummary}
             onOpenProducts={handleOpenProductsTrigger}
+            onOpenCashMovements={handleOpenCashMovementModalTrigger}
             settings={settings}
             currentSession={session}
           />
@@ -2507,6 +3051,8 @@ function App() {
               canViewAdisyon={can(session || currentUser, 'order_view_adisyon', settings)}
               canReopenOrder={can(session || currentUser, 'reopen_order', settings)}
               onRequestReopenOrder={handleRequestReopenOrder}
+              onOpenCashMovements={handleOpenCashMovementModalTrigger}
+              canManageCashMovements={can(session || currentUser, 'cash_movement_manage', settings)}
               completedOrders={completedOrders}
               openBusinessDayId={openBusinessDay?.id}
             />
@@ -2570,6 +3116,7 @@ function App() {
           onPaid={finishPayment}
           onAddPayment={handleAddPayment}
           onUndoLastPayment={handleUndoLastPayment}
+          onRefundOverpayment={handleRefundOverpayment}
           orderNumber={completedModalSnapshot ? completedModalSnapshot.orderNumber : orderNumber}
           paidMethod={paidMethod}
           payments={completedModalSnapshot ? completedModalSnapshot.payments || [] : payments}
@@ -2589,6 +3136,7 @@ function App() {
           openBusinessDay={openBusinessDay}
           initialSelectedDayId={reportSelectedDayId}
           tables={tables}
+          cashMovements={cashMovements}
           settings={settings}
           onClearReports={handleClearReports}
           onOpenDayModal={handleOpenDayModalTrigger}
@@ -2614,6 +3162,8 @@ function App() {
           openDay={openBusinessDay}
           orders={completedOrders}
           tables={tables}
+          cashMovements={cashMovements}
+          businessDays={businessDays}
           settings={settings}
           onClose={() => setIsCloseDayModalOpen(false)}
           onCloseDay={handleCloseDay}
@@ -2626,6 +3176,26 @@ function App() {
           }}
         />
 
+        <CashMovementModal
+          isOpen={isCashMovementModalOpen}
+          onClose={() => setIsCashMovementModalOpen(false)}
+          openBusinessDay={openBusinessDay}
+          movements={cashMovements}
+          canManage={can(session || currentUser, 'cash_movement_manage', settings)}
+          onAddMovement={handleAddCashMovement}
+          onCancelMovement={handleCancelCashMovement}
+          onOpenDayModal={handleOpenDayModalTrigger}
+          onUnauthorized={() => {
+            logUnauthorizedAttempt(
+              session || currentUser,
+              'cash_movement_manage',
+              openBusinessDay?.id,
+            )
+            setDeniedActionName('Kasa Giriş/Çıkış Hareketi')
+            setPermissionDeniedModalOpen(true)
+          }}
+        />
+
         <RefundModal
           isOpen={refundModalOpen}
           onClose={() => {
@@ -2635,10 +3205,38 @@ function App() {
           }}
           item={refundItemTarget}
           table={refundTableTarget}
+          cart={
+            refundTableTarget
+              ? refundTableTarget.cart
+              : activeTable
+                ? activeTable.cart
+                : directCart
+          }
+          discountRate={
+            refundTableTarget
+              ? (refundTableTarget.discountRate || 0)
+              : activeTable
+                ? (activeTable.discountRate || 0)
+                : directDiscountRate
+          }
+          discountAmount={
+            refundTableTarget
+              ? (refundTableTarget.discountAmount || 0)
+              : activeTable
+                ? (activeTable.discountAmount || 0)
+                : directDiscountAmount
+          }
           hasPaymentReceived={
             refundTableTarget
-              ? Boolean(refundTableTarget.payments && refundTableTarget.payments.length > 0)
-              : Boolean(payments && payments.length > 0)
+              ? derivePaymentState(
+                  calculateTotals(
+                    refundTableTarget.cart,
+                    refundTableTarget.discountRate || 0,
+                    refundTableTarget.discountAmount || 0,
+                  ).total,
+                  refundTableTarget.payments || [],
+                ).paidTotal > 0
+              : derivePaymentState(totals.total, payments || []).paidTotal > 0
           }
           onConfirmRefund={handleConfirmRefund}
         />

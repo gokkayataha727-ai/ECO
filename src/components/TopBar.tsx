@@ -1,8 +1,9 @@
-import { BarChart3, CircleHelp, MapPin, Settings, Image as ImageIcon, Monitor, Power, ChevronDown, Moon, Sun, LogOut, Minus } from 'lucide-react'
+import { BarChart3, CircleHelp, Clock, MapPin, Settings, Image as ImageIcon, Monitor, Power, ChevronDown, Moon, Sun, LogOut, Minus } from 'lucide-react'
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { AppLogo } from './AppLogo'
 import { openCustomerDisplay, minimizeApp, isElectronEnvironment } from '../lib/api'
+import { getOpenBusinessDayDurationAlert } from '../lib/businessDay'
 import { formatCurrency } from '../lib/format'
 import { can } from '../lib/permissions'
 import type { AppSettings, BusinessDay, Session } from '../types'
@@ -176,6 +177,7 @@ export function TopBar({
         new Date(openBusinessDay.openedAt),
       )
     : null
+  const durationAlert = getOpenBusinessDayDurationAlert(openBusinessDay, now)
 
   return (
     <header className="topbar flex items-center justify-between gap-3">
@@ -278,13 +280,26 @@ export function TopBar({
               aria-haspopup="menu"
               aria-expanded={dayMenuOpen}
               aria-controls={dayMenuOpen ? 'active-business-day-menu' : undefined}
-              title={`Gün Açık · Açılış: ${openedTimeText} (${openBusinessDay.openedBy})`}
+              title={
+                durationAlert
+                  ? durationAlert.message
+                  : `Gün Açık · Açılış: ${openedTimeText} (${openBusinessDay.openedBy})`
+              }
               className="status-pill inline-flex items-center gap-1.5 cursor-pointer hover:brightness-95 transition-all"
             >
               <span className="live-dot" />
               <span>Gün Açık</span>
               {openedTimeText && (
                 <span className="text-[10px] font-semibold opacity-75">· {openedTimeText}</span>
+              )}
+              {durationAlert && (
+                <span
+                  data-testid="topbar-multiday-badge"
+                  className="ml-0.5 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[10px] font-extrabold"
+                >
+                  <Clock size={10} />
+                  {durationAlert.calendarDaysOpen}g
+                </span>
               )}
               {canManageDay && <ChevronDown size={13} className="opacity-70" />}
             </button>
@@ -314,6 +329,14 @@ export function TopBar({
                   {typeof openBusinessDay.cardCarryIn === 'number' && openBusinessDay.cardCarryIn > 0 && (
                     <div className="text-[11px] text-[#8a6d57] dark:text-amber-400 font-semibold mt-0.5">
                       Kart Devir: {formatCurrency(openBusinessDay.cardCarryIn)}
+                    </div>
+                  )}
+                  {durationAlert && (
+                    <div
+                      role="status"
+                      className="mt-1.5 px-2 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 text-[11px] font-bold text-amber-900 dark:text-amber-200"
+                    >
+                      {durationAlert.message}
                     </div>
                   )}
                 </div>

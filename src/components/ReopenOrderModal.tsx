@@ -45,7 +45,7 @@ export function ReopenOrderModal({
     }
     const firstEmpty = tables.find((t) => !isTableOccupied(t))
     setTargetTableId(firstEmpty ? firstEmpty.id : (tables[0]?.id || ''))
-  }, [isOpen, order?.id])
+  }, [isOpen, order, tables])
 
   if (!isOpen || !order) return null
 

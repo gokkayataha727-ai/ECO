@@ -602,6 +602,10 @@ export const ACTIVITY_LOG_LABELS: Record<ActivityLogType, { label: string; badge
     label: 'Ödeme Alındı',
     badgeClass: 'bg-teal-100 text-teal-800 dark:bg-teal-950/50 dark:text-teal-300 border-teal-200 dark:border-teal-800',
   },
+  payment_cancel: {
+    label: 'Ödeme Geri Alındı',
+    badgeClass: 'bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300 border-rose-200 dark:border-rose-800 font-bold',
+  },
   discount: {
     label: 'İndirim Uygulandı',
     badgeClass: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/50 dark:text-yellow-300 border-yellow-200 dark:border-yellow-800',
@@ -717,6 +721,14 @@ export const ACTIVITY_LOG_LABELS: Record<ActivityLogType, { label: string; badge
   crash_recovery: {
     label: 'Çökme Toparlama',
     badgeClass: 'bg-amber-200 text-amber-900 dark:bg-amber-950/60 dark:text-amber-200 border-amber-300 dark:border-amber-700 font-bold',
+  },
+  cash_movement_add: {
+    label: 'Kasa Hareketi (Giriş/Çıkış)',
+    badgeClass: 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950/60 dark:text-emerald-200 border-emerald-300 dark:border-emerald-700 font-bold',
+  },
+  cash_movement_cancel: {
+    label: 'Kasa Hareketi İptali',
+    badgeClass: 'bg-rose-100 text-rose-900 dark:bg-rose-950/60 dark:text-rose-200 border-rose-300 dark:border-rose-700 font-bold',
   },
 }
 

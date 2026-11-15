@@ -58,6 +58,7 @@ interface PaymentModalProps {
   onPaid: (method: PaymentMethod) => void
   onAddPayment: (payment: PartialPayment, isComplete: boolean, finalMethod: PaymentMethod) => void
   onUndoLastPayment?: () => void
+  onRefundOverpayment?: (method: 'card' | 'cash' | 'iban', amount: number) => void
   orderNumber: string
   paidMethod: PaymentMethod | null
   payments: PartialPayment[]
@@ -79,6 +80,7 @@ export function PaymentModal({
   onPaid,
   onAddPayment,
   onUndoLastPayment,
+  onRefundOverpayment,
   orderNumber,
   paidMethod,
   payments,
@@ -112,6 +114,7 @@ export function PaymentModal({
   const [showDiscountEditor, setShowDiscountEditor] = useState(false)
   const [discountMode, setDiscountMode] = useState<'amount' | 'net' | 'percent'>('amount')
   const [discountInput, setDiscountInput] = useState('')
+  const [overpaymentRefundMethod, setOverpaymentRefundMethod] = useState<'card' | 'cash' | 'iban'>('cash')
 
   const grandTotal = roundCurrency(totals.total)
   const baseTotalBeforePaymentDiscount = roundCurrency(grandTotal + discountAmount)
@@ -121,7 +124,9 @@ export function PaymentModal({
     () => (payments || []).filter((p) => (p.status || 'GECERLI') !== 'IPTAL' && p.type !== 'IADE'),
     [payments],
   )
+  const lastValidPayment = validPayments.length > 0 ? validPayments[validPayments.length - 1] : null
   const hasPartialPayments = validPayments.length > 0
+  const hasAnyPaymentMovements = (payments || []).length > 0
 
   const lineStates = useMemo(
     () => deriveLinePaymentStates(cart, discountRate, payments, discountAmount),
@@ -263,11 +268,11 @@ export function PaymentModal({
       roundCurrency(baseTotalBeforePaymentDiscount - nextDiscount - paidTotal),
     )
     if (newRemainingAfterDiscount === 0 && paidTotal > 0) {
-      const uniqueMethods = new Set(payments.map((p) => normalizePaymentMethod(p.method, 'cash')))
+      const uniqueMethods = new Set(validPayments.map((p) => normalizePaymentMethod(p.method, 'cash')))
       const finalMethod: PaymentMethod =
         uniqueMethods.size > 1
           ? 'mixed'
-          : normalizePaymentMethod(payments[0]?.method, 'cash')
+          : normalizePaymentMethod(validPayments[0]?.method, 'cash')
       onPaid(finalMethod)
     }
   }
@@ -285,7 +290,7 @@ export function PaymentModal({
   const isAmountZeroOrEmpty = amountInput.trim() === '' || amountToPay <= 0
   const isAmountExceeding = amountToPay > roundCurrency(remaining + 0.001)
   const isAmountValid = !isAmountZeroOrEmpty && !isAmountExceeding
-  const isZeroRemainingToComplete = remaining === 0 && paidTotal > 0 && !paidMethod
+  const isZeroRemainingToComplete = remaining === 0 && overpayment === 0 && paidTotal > 0 && !paidMethod
 
   // İŞ 2: Kullanıcı tutarı seçili ürün toplamından farklı girdiyse tutar bazlı kısmi ödeme uygulanır
   const isManualAmountWithSelection =
@@ -395,11 +400,11 @@ export function PaymentModal({
   const handleConfirm = () => {
     if (!canConfirm || processing) return
     if (isZeroRemainingToComplete) {
-      const uniqueMethods = new Set(payments.map((p) => normalizePaymentMethod(p.method, 'cash')))
+      const uniqueMethods = new Set(validPayments.map((p) => normalizePaymentMethod(p.method, 'cash')))
       const finalMethod: PaymentMethod =
         uniqueMethods.size > 1
           ? 'mixed'
-          : normalizePaymentMethod(payments[0]?.method, 'cash')
+          : normalizePaymentMethod(validPayments[0]?.method, 'cash')
       onPaid(finalMethod)
       return
     }
@@ -415,8 +420,12 @@ export function PaymentModal({
 
     const paymentEntry: PartialPayment = {
       id: generateUUID(),
+      type: 'ODEME',
+      status: 'GECERLI',
       method: normalizedMethod,
       amount: payAmount,
+      ...(currentSession?.fullName ? { cashier: currentSession.fullName } : {}),
+      ...(currentSession?.userId ? { userId: currentSession.userId } : {}),
       ...(normalizedMethod === 'cash'
         ? {
             receivedAmount: payAmount,
@@ -433,8 +442,8 @@ export function PaymentModal({
       createdAt: new Date().toISOString(),
     }
 
-    const allPayments = [...payments, paymentEntry]
-    const uniqueMethods = new Set(allPayments.map((p) => normalizePaymentMethod(p.method, 'cash')))
+    const allValidPayments = [...validPayments, paymentEntry]
+    const uniqueMethods = new Set(allValidPayments.map((p) => normalizePaymentMethod(p.method, 'cash')))
     const finalMethod: PaymentMethod =
       uniqueMethods.size > 1 ? 'mixed' : normalizedMethod
 
@@ -875,10 +884,69 @@ export function PaymentModal({
               {overpayment > 0 && (
                 <div
                   role="status"
-                  className="rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 px-3 py-2 flex items-center justify-between text-xs font-bold text-rose-700 dark:text-rose-300"
+                  data-testid="overpayment-banner"
+                  className="rounded-xl border border-rose-200 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/40 px-3 py-2.5 space-y-2 text-xs text-rose-700 dark:text-rose-300"
                 >
-                  <span>Fazla Ödeme / İade Edilecek</span>
-                  <strong>{formatCurrency(overpayment)}</strong>
+                  <div className="flex items-center justify-between font-bold">
+                    <span>Fazla Ödeme / İade Edilecek: {formatCurrency(overpayment)}</span>
+                    <strong>{formatCurrency(overpayment)}</strong>
+                  </div>
+                  {onRefundOverpayment && (
+                    <div className="pt-1.5 border-t border-rose-200/70 dark:border-rose-800/60 space-y-2">
+                      <span className="block text-[11px] font-semibold text-rose-800 dark:text-rose-200">
+                        İade yöntemini seçip onaylayın:
+                      </span>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setOverpaymentRefundMethod('cash')}
+                          className={`py-1.5 px-2 rounded-lg border text-[11px] font-bold flex items-center justify-center gap-1 transition-all ${
+                            overpaymentRefundMethod === 'cash'
+                              ? 'border-emerald-600 bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-200'
+                              : 'border-rose-200 dark:border-rose-800 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300'
+                          }`}
+                        >
+                          <Banknote size={13} />
+                          Nakit
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setOverpaymentRefundMethod('card')}
+                          className={`py-1.5 px-2 rounded-lg border text-[11px] font-bold flex items-center justify-center gap-1 transition-all ${
+                            overpaymentRefundMethod === 'card'
+                              ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-200'
+                              : 'border-rose-200 dark:border-rose-800 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300'
+                          }`}
+                        >
+                          <CreditCard size={13} />
+                          Kart
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setOverpaymentRefundMethod('iban')}
+                          className={`py-1.5 px-2 rounded-lg border text-[11px] font-bold flex items-center justify-center gap-1 transition-all ${
+                            overpaymentRefundMethod === 'iban'
+                              ? 'border-sky-600 bg-sky-50 dark:bg-sky-950/50 text-sky-800 dark:text-sky-200'
+                              : 'border-rose-200 dark:border-rose-800 bg-white dark:bg-stone-800 text-stone-700 dark:text-stone-300'
+                          }`}
+                        >
+                          <Landmark size={13} />
+                          IBAN
+                        </button>
+                      </div>
+                      <button
+                        type="button"
+                        data-testid="confirm-overpayment-refund-btn"
+                        onClick={() => {
+                          onRefundOverpayment(overpaymentRefundMethod, overpayment)
+                          setFeedback(`Fazla ödeme (${formatCurrency(overpayment)}) iade edildi.`)
+                        }}
+                        className="w-full py-2 px-3 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-xs transition-colors"
+                      >
+                        Fazla Ödemeyi İade Et ({formatCurrency(overpayment)})
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -1252,11 +1320,11 @@ export function PaymentModal({
               )}
 
               {/* Yapılan Ödemeler Listesi */}
-              {hasPartialPayments && (
+              {hasAnyPaymentMovements && (
                 <div className="partial-payments-list">
                   <div className="partial-payments-head">
                     <span>Yapılan Ödemeler ({payments.length})</span>
-                    {onUndoLastPayment && (
+                    {onUndoLastPayment && hasPartialPayments && (
                       !confirmUndo ? (
                         <button
                           type="button"
@@ -1267,7 +1335,11 @@ export function PaymentModal({
                         </button>
                       ) : (
                         <span className="undo-confirm-inline">
-                          <span>Silinsin mi?</span>
+                          <span>
+                            {lastValidPayment?.method === 'cash'
+                              ? 'Nakit kasadan geri verildi mi?'
+                              : 'İptal edilsin mi?'}
+                          </span>
                           <button
                             type="button"
                             className="confirm-yes"
@@ -1296,8 +1368,13 @@ export function PaymentModal({
                   {payments.map((p) => {
                     const timeStr = formatTime(p.createdAt)
                     const itemsSummary = formatPaymentItemsSummary(p)
+                    const isCancelled = (p.status || 'GECERLI') === 'IPTAL'
+                    const isRefundMovement = p.type === 'IADE'
                     return (
-                      <div key={p.id} className="partial-payment-row">
+                      <div
+                        key={p.id}
+                        className={`partial-payment-row ${isCancelled ? 'opacity-60' : ''}`}
+                      >
                         <span className="partial-payment-method">
                           {p.method === 'card' ? (
                             <CreditCard size={13} />
@@ -1307,12 +1384,32 @@ export function PaymentModal({
                             <Landmark size={13} />
                           )}
                           <span>{paymentMethodLabel(p.method)}</span>
+                          {isRefundMovement && (
+                            <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 text-[10px] font-bold">
+                              İade
+                            </span>
+                          )}
+                          {isCancelled && (
+                            <span className="px-1.5 py-0.5 rounded bg-stone-200 text-stone-700 text-[10px] font-bold">
+                              İptal
+                            </span>
+                          )}
                           {itemsSummary && (
                             <span className="partial-payment-items-tag">{itemsSummary}</span>
                           )}
                           <small className="partial-payment-time">{timeStr}</small>
                         </span>
-                        <strong>{formatCurrency(p.amount)}</strong>
+                        <strong
+                          className={
+                            isCancelled
+                              ? 'line-through text-stone-500'
+                              : isRefundMovement
+                                ? 'text-rose-600'
+                                : ''
+                          }
+                        >
+                          {isRefundMovement ? `-${formatCurrency(p.amount)}` : formatCurrency(p.amount)}
+                        </strong>
                       </div>
                     )
                   })}

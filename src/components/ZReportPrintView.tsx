@@ -1,4 +1,5 @@
 import { AppLogo } from './AppLogo'
+import { hesaplaBeklenenNakit } from '../lib/businessDay'
 import { formatCurrency, roundCurrency } from '../lib/format'
 import type { AppSettings, BusinessDay, BusinessDayReportSnapshot } from '../types'
 
@@ -41,15 +42,17 @@ export function ZReportPrintView({
       })
     : 'Açık Vardiya'
 
-  const openTableCash =
-    day?.status === 'open' ? (report.openTablePaymentsByMethod?.cash || 0) : 0
   const openTableCard =
     day?.status === 'open' ? (report.openTablePaymentsByMethod?.card || 0) : 0
 
+  const cashSummary = hesaplaBeklenenNakit(day ?? null, report)
+  const { kirilim } = cashSummary
+
   const expectedCash = day
-    ? (day.expectedCash ??
-      roundCurrency(day.openingCash + report.paymentDistribution.cash + openTableCash))
-    : report.paymentDistribution.cash
+    ? day.status === 'closed' && typeof cashSummary.arsivExpectedCash === 'number'
+      ? cashSummary.arsivExpectedCash
+      : cashSummary.beklenen
+    : cashSummary.beklenen
 
   const cashDiff =
     day && typeof day.countedCash === 'number'
@@ -68,6 +71,12 @@ export function ZReportPrintView({
   const openGross = roundCurrency(report.openTablesGrossRevenue || 0)
   const paidRefunds = roundCurrency(report.paidRefundsTotal || 0)
   const openPartial = roundCurrency(report.openTablePaymentsTotal || 0)
+  const grossCiro = roundCurrency(report.grossItemsRevenue ?? report.totalRevenue)
+  const allDiscount = roundCurrency((report.totalDiscount || 0) + (report.openTablesDiscountTotal || 0))
+  const netCiroAfterDisc = Math.max(0, roundCurrency(grossCiro - allDiscount))
+  const unexplainedDiff = roundCurrency(
+    Math.max(report.unexplainedDifference || 0, cashSummary?.aciklanamayanFark || 0),
+  )
 
   if (mode === 'a4') {
     return (
@@ -119,22 +128,39 @@ export function ZReportPrintView({
           </div>
         )}
 
+        {unexplainedDiff > 0 && (
+          <div
+            className="mb-4 p-2.5 rounded-xl bg-rose-50 border border-rose-300 text-rose-900 font-bold text-[11px]"
+            data-testid="zreport-a4-unexplained-diff"
+          >
+            Açıklanamayan fark: {formatCurrency(unexplainedDiff)} (Negatif bakiye kırpması tespit edildi — veri tutarsızlığını kontrol edin)
+          </div>
+        )}
+
         <div className="z-report-kpi-grid grid grid-cols-3 sm:grid-cols-6 gap-2.5 mb-5">
           <div className="z-report-kpi-card p-2.5 rounded-xl bg-stone-50 border border-stone-200">
-            <span className="text-[10px] text-stone-500 font-bold block">TOPLAM CİRO</span>
+            <span className="text-[10px] text-stone-500 font-bold block">GİRİLEN ÜRÜNLER (BRÜT)</span>
             <strong className="text-sm font-extrabold text-stone-900">
-              {formatCurrency(report.grossItemsRevenue ?? report.totalRevenue)}
+              {formatCurrency(grossCiro)}
             </strong>
+            <span className="text-[9px] text-stone-500 block">
+              indirim öncesi, açık dahil
+            </span>
           </div>
           <div className="z-report-kpi-card p-2.5 rounded-xl bg-stone-50 border border-stone-200">
             <span className="text-[10px] text-stone-500 font-bold block">SİPARİŞ SAYISI</span>
             <strong className="text-sm font-extrabold text-stone-900">{report.orderCount}</strong>
           </div>
           <div className="z-report-kpi-card p-2.5 rounded-xl bg-stone-50 border border-stone-200">
-            <span className="text-[10px] text-stone-500 font-bold block">ÖDENEN MASALAR</span>
+            <span className="text-[10px] text-stone-500 font-bold block">TAHSİL EDİLEN (NET)</span>
             <strong className="text-sm font-extrabold text-stone-900">
               {formatCurrency(report.paidTablesTotal ?? report.totalRevenue)}
             </strong>
+            {allDiscount > 0 && (
+              <span className="text-[9px] text-stone-500 block">
+                Net Ciro: {formatCurrency(netCiroAfterDisc)}
+              </span>
+            )}
           </div>
           <div className="z-report-kpi-card p-2.5 rounded-xl bg-stone-50 border border-stone-200">
             <span className="text-[10px] text-stone-500 font-bold block">TOPLAM KDV (%{taxRate} · KART)</span>
@@ -145,7 +171,7 @@ export function ZReportPrintView({
           <div className="z-report-kpi-card p-2.5 rounded-xl bg-stone-50 border border-stone-200">
             <span className="text-[10px] text-stone-500 font-bold block">TOPLAM İNDİRİM</span>
             <strong className="text-sm font-extrabold text-stone-900">
-              {formatCurrency(report.totalDiscount)}
+              {formatCurrency(allDiscount)}
             </strong>
           </div>
           <div className="z-report-kpi-card p-2.5 rounded-xl bg-stone-50 border border-stone-200">
@@ -180,6 +206,15 @@ export function ZReportPrintView({
                   <strong>{formatCurrency(openPartial)}</strong>
                 </div>
               )}
+              {(report.previousDayCarryoverCollection || 0) > 0 && (
+                <div
+                  className="flex justify-between pt-1 border-t border-stone-100 text-amber-900 font-bold"
+                  data-testid="zreport-a4-carryover-collection"
+                >
+                  <span>Önceki günden devreden tahsilat</span>
+                  <strong>{formatCurrency(report.previousDayCarryoverCollection || 0)}</strong>
+                </div>
+              )}
               {openGross > 0 && (
                 <div className="flex justify-between text-stone-600">
                   <span>Açık Masalar (Brüt)</span>
@@ -203,12 +238,44 @@ export function ZReportPrintView({
               <div className="space-y-1.5">
                 <div className="flex justify-between">
                   <span>Açılış Nakiti</span>
-                  <strong>{formatCurrency(day.openingCash)}</strong>
+                  <strong>{formatCurrency(kirilim.acilisNakiti)}</strong>
                 </div>
                 <div className="flex justify-between">
-                  <span>Beklenen Nakit</span>
-                  <strong>{formatCurrency(expectedCash)}</strong>
+                  <span>+ Kapanan adisyonlar (nakit)</span>
+                  <strong>{formatCurrency(kirilim.kapananNakit)}</strong>
                 </div>
+                <div className="flex justify-between">
+                  <span>+ Açık masa ara ödemeleri</span>
+                  <strong>{formatCurrency(kirilim.acikMasaNakit)}</strong>
+                </div>
+                <div className="flex justify-between">
+                  <span>− Nakit iadeler</span>
+                  <strong>{formatCurrency(kirilim.nakitIadeler)}</strong>
+                </div>
+                {kirilim.kasaGiris > 0 && (
+                  <div className="flex justify-between">
+                    <span>+ Kasa giriş</span>
+                    <strong>{formatCurrency(kirilim.kasaGiris)}</strong>
+                  </div>
+                )}
+                {kirilim.kasaCikis > 0 && (
+                  <div className="flex justify-between">
+                    <span>− Kasa çıkış</span>
+                    <strong>{formatCurrency(kirilim.kasaCikis)}</strong>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-stone-100 pt-1">
+                  <span className="font-bold">= Beklenen Nakit</span>
+                  <strong data-testid="zreport-a4-expected-cash">
+                    {formatCurrency(expectedCash)}
+                  </strong>
+                </div>
+                {typeof cashSummary.arsivFarki === 'number' && (
+                  <div className="text-[10px] text-amber-800 bg-amber-50 px-2 py-1 rounded">
+                    Merkezi hesap: {formatCurrency(cashSummary.beklenen)} (arşiv farkı:{' '}
+                    {formatCurrency(cashSummary.arsivFarki)})
+                  </div>
+                )}
                 {typeof day.countedCash === 'number' && (
                   <div className="flex justify-between">
                     <span>Sayılan Nakit</span>
@@ -229,8 +296,17 @@ export function ZReportPrintView({
                     >
                       {cashDiff > 0 ? '+' : ''}
                       {formatCurrency(cashDiff)}{' '}
-                      {cashDiff === 0 ? '(Tam)' : cashDiff > 0 ? '(Fazla)' : '(Eksik)'}
+                      {cashDiff === 0 ? '(Kasa Tam)' : cashDiff > 0 ? '(Fazla)' : '(Eksik)'}
                     </strong>
+                  </div>
+                )}
+                {day.cashDifferenceNote && (
+                  <div
+                    className="mt-1.5 pt-1.5 border-t border-stone-100 text-[10px] text-stone-700"
+                    data-testid="zreport-a4-cash-difference-note"
+                  >
+                    <span className="font-bold">Kasa Farkı Açıklaması:</span>{' '}
+                    {day.cashDifferenceNote}
                   </div>
                 )}
               </div>
@@ -313,6 +389,50 @@ export function ZReportPrintView({
           )}
         </div>
 
+        {report.cashMovements && report.cashMovements.length > 0 && (
+          <div className="z-report-table-section mb-4" data-testid="zreport-a4-cash-movements">
+            <h4 className="font-extrabold text-stone-800 uppercase text-[11px] mb-2">
+              Kasa Giriş / Çıkış Hareketleri ({report.cashMovements.length} kayıt)
+            </h4>
+            <table className="z-report-table w-full text-left border-collapse border border-stone-200">
+              <thead className="z-report-thead">
+                <tr className="bg-stone-100 text-[10px] uppercase text-stone-600">
+                  <th className="py-1.5 px-2.5 border-b border-stone-200">Saat / Tür</th>
+                  <th className="py-1.5 px-2.5 border-b border-stone-200">Kategori</th>
+                  <th className="py-1.5 px-2.5 border-b border-stone-200">Açıklama</th>
+                  <th className="py-1.5 px-2.5 border-b border-stone-200">Personel</th>
+                  <th className="py-1.5 px-2.5 border-b border-stone-200 text-right">Tutar</th>
+                </tr>
+              </thead>
+              <tbody className="z-report-tbody divide-y divide-stone-100">
+                {report.cashMovements.map((mov) => (
+                  <tr key={mov.id} className={mov.cancelled ? 'text-stone-400 line-through' : ''}>
+                    <td className="py-1.5 px-2.5 font-semibold">
+                      {new Date(mov.createdAt).toLocaleTimeString('tr-TR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}{' '}
+                      · {mov.type === 'GIRIS' ? 'Giriş' : 'Çıkış'}
+                    </td>
+                    <td className="py-1.5 px-2.5">{mov.category}</td>
+                    <td className="py-1.5 px-2.5">
+                      {mov.description}
+                      {mov.cancelled && mov.cancelledReason
+                        ? ` [İptal: ${mov.cancelledReason}]`
+                        : ''}
+                    </td>
+                    <td className="py-1.5 px-2.5">{mov.createdBy}</td>
+                    <td className="py-1.5 px-2.5 text-right font-bold tabular-nums">
+                      {mov.type === 'GIRIS' ? '+' : '−'}
+                      {formatCurrency(mov.amount)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
         <div className="z-report-footer text-center text-[10px] text-stone-400 pt-3 border-t border-stone-200">
           Rapor Oluşturulma Zamanı: {new Date(report.generatedAt).toLocaleString('tr-TR')} ·{' '}
           {storeName}
@@ -355,7 +475,7 @@ export function ZReportPrintView({
           <span>{report.orderCount} adet</span>
         </div>
         <div className="receipt-line">
-          <span>Ödenen Masalar Toplamı</span>
+          <span>Tahsil Edilen (Net)</span>
           <span>{formatCurrency(report.paidTablesTotal ?? report.totalRevenue)}</span>
         </div>
         {openGross > 0 && (
@@ -378,16 +498,32 @@ export function ZReportPrintView({
         )}
         <div className="receipt-line">
           <span>Toplam İndirim</span>
-          <span>-{formatCurrency(report.totalDiscount)}</span>
+          <span>-{formatCurrency(allDiscount)}</span>
         </div>
+        {allDiscount > 0 && (
+          <div className="receipt-line">
+            <span>Net Ciro (İndirim Sonrası)</span>
+            <span>{formatCurrency(netCiroAfterDisc)}</span>
+          </div>
+        )}
         <div className="receipt-line">
           <span>Toplam KDV (%{taxRate} · Kart)</span>
           <span>{formatCurrency(report.totalTax)}</span>
         </div>
         <div className="receipt-line receipt-total">
-          <span>TOPLAM CİRO</span>
-          <span>{formatCurrency(report.grossItemsRevenue ?? report.totalRevenue)}</span>
+          <span>GİRİLEN ÜRÜNLER (BRÜT)</span>
+          <span>{formatCurrency(grossCiro)}</span>
         </div>
+        {unexplainedDiff > 0 && (
+          <div
+            className="receipt-line"
+            style={{ fontWeight: 800, color: '#9f1239' }}
+            data-testid="zreport-receipt-unexplained-diff"
+          >
+            <span>Açıklanamayan fark</span>
+            <span>{formatCurrency(unexplainedDiff)}</span>
+          </div>
+        )}
 
         <div className="receipt-dash" />
         <div style={{ fontSize: '10px', fontWeight: 800, padding: '6px 0 2px' }}>
@@ -405,6 +541,16 @@ export function ZReportPrintView({
           <span>IBAN</span>
           <span>{formatCurrency(report.paymentDistribution.iban)}</span>
         </div>
+        {(report.previousDayCarryoverCollection || 0) > 0 && (
+          <div
+            className="receipt-line"
+            style={{ fontWeight: 700 }}
+            data-testid="zreport-receipt-carryover-collection"
+          >
+            <span>Önceki günden devreden tahsilat</span>
+            <span>{formatCurrency(report.previousDayCarryoverCollection || 0)}</span>
+          </div>
+        )}
 
         <div className="receipt-dash" />
         <div style={{ fontSize: '10px', fontWeight: 800, padding: '6px 0 2px' }}>
@@ -444,12 +590,44 @@ export function ZReportPrintView({
             </div>
             <div className="receipt-line">
               <span>Açılış Nakiti</span>
-              <span>{formatCurrency(day.openingCash)}</span>
+              <span>{formatCurrency(kirilim.acilisNakiti)}</span>
             </div>
             <div className="receipt-line">
-              <span>Beklenen Nakit</span>
-              <span>{formatCurrency(expectedCash)}</span>
+              <span>+ Kapanan adisyonlar</span>
+              <span>{formatCurrency(kirilim.kapananNakit)}</span>
             </div>
+            <div className="receipt-line">
+              <span>+ Açık masa ara ödemeleri</span>
+              <span>{formatCurrency(kirilim.acikMasaNakit)}</span>
+            </div>
+            <div className="receipt-line">
+              <span>− Nakit iadeler</span>
+              <span>{formatCurrency(kirilim.nakitIadeler)}</span>
+            </div>
+            {kirilim.kasaGiris > 0 && (
+              <div className="receipt-line">
+                <span>+ Kasa giriş</span>
+                <span>{formatCurrency(kirilim.kasaGiris)}</span>
+              </div>
+            )}
+            {kirilim.kasaCikis > 0 && (
+              <div className="receipt-line">
+                <span>− Kasa çıkış</span>
+                <span>{formatCurrency(kirilim.kasaCikis)}</span>
+              </div>
+            )}
+            <div className="receipt-line" style={{ fontWeight: 800 }}>
+              <span>= Beklenen Nakit</span>
+              <span data-testid="zreport-receipt-expected-cash">
+                {formatCurrency(expectedCash)}
+              </span>
+            </div>
+            {typeof cashSummary.arsivFarki === 'number' && (
+              <div className="receipt-line">
+                <span>Merkezi Hesap (Fark)</span>
+                <span>{formatCurrency(cashSummary.beklenen)}</span>
+              </div>
+            )}
             {typeof day.countedCash === 'number' && (
               <div className="receipt-line">
                 <span>Sayılan Nakit</span>
@@ -458,11 +636,20 @@ export function ZReportPrintView({
             )}
             {cashDiff !== null && (
               <div className="receipt-line" style={{ fontWeight: 800 }}>
-                <span>Fark ({cashDiff === 0 ? 'Tam' : cashDiff > 0 ? 'Fazla' : 'Eksik'})</span>
+                <span>Fark ({cashDiff === 0 ? 'Kasa Tam' : cashDiff > 0 ? 'Fazla' : 'Eksik'})</span>
                 <span>
                   {cashDiff > 0 ? '+' : ''}
                   {formatCurrency(cashDiff)}
                 </span>
+              </div>
+            )}
+            {day.cashDifferenceNote && (
+              <div
+                className="receipt-line"
+                style={{ display: 'block', marginTop: '3px', fontSize: '10px' }}
+                data-testid="zreport-receipt-cash-difference-note"
+              >
+                <strong>Kasa Farkı Açıklaması:</strong> {day.cashDifferenceNote}
               </div>
             )}
           </>
@@ -483,6 +670,36 @@ export function ZReportPrintView({
               </div>
             ))}
           </>
+        )}
+
+        {report.cashMovements && report.cashMovements.length > 0 && (
+          <div data-testid="zreport-receipt-cash-movements">
+            <div className="receipt-dash" />
+            <div style={{ fontSize: '10px', fontWeight: 800, padding: '6px 0 2px' }}>
+              KASA HAREKETLERİ
+            </div>
+            {report.cashMovements.map((mov) => (
+              <div key={mov.id} style={{ marginBottom: '3px' }}>
+                <div
+                  className="receipt-line"
+                  style={mov.cancelled ? { textDecoration: 'line-through', opacity: 0.65 } : undefined}
+                >
+                  <span>
+                    {mov.type === 'GIRIS' ? '+' : '−'} {mov.category}: {mov.description}
+                  </span>
+                  <span>
+                    {mov.type === 'GIRIS' ? '+' : '−'}
+                    {formatCurrency(mov.amount)}
+                  </span>
+                </div>
+                {mov.cancelled && (
+                  <div style={{ fontSize: '9px', color: '#555' }}>
+                    İptal{mov.cancelledReason ? `: ${mov.cancelledReason}` : ''}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
         )}
 
         {report.cancelledCount > 0 && (

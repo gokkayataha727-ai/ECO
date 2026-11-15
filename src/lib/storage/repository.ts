@@ -1,6 +1,7 @@
 import type {
   AppSettings,
   BusinessDay,
+  CashMovement,
   CompletedOrder,
   Product,
   Refund,
@@ -15,6 +16,7 @@ import { quarantineCorruptPayload } from './quarantine'
 import {
   validateActivityLogs,
   validateBusinessDays,
+  validateCashMovements,
   validateCompletedOrders,
   validateMenuProducts,
   validateRefunds,
@@ -30,6 +32,7 @@ import {
   emitCriticalStorageError,
   getActivityLogsSqlite,
   getBusinessDaysSqlite,
+  getCashMovementsSqlite,
   getCompletedOrdersSqlite,
   getKvItemSqlite,
   getMenuProductsSqlite,
@@ -45,6 +48,7 @@ import {
   removeKvItemSqlite,
   saveActivityLogsSqlite,
   saveBusinessDaysSqlite,
+  saveCashMovementsSqlite,
   saveCompletedOrdersSqlite,
   saveMenuProductsSqlite,
   saveRefundsSqlite,
@@ -126,6 +130,7 @@ function ensureSqliteReady(): void {
       'menuProducts',
       'appSettings',
       'refunds',
+      'cashMovements',
       'activityLogs',
       'appUsers',
     ]
@@ -580,6 +585,56 @@ export function saveRefundsSafe(refunds: Refund[]): boolean {
     return safeSetItem('refunds', json)
   } catch (err) {
     reportStorageError('refunds', err)
+    return false
+  }
+}
+
+// ──────────────────────────────────────────────
+// Cash Movements Repository
+// ──────────────────────────────────────────────
+
+export function getCashMovementsSafe(): CashMovement[] {
+  if (isSqliteBackendActive()) {
+    ensureSqliteReady()
+    hydrateKeyFromLocalStorageIfNeeded<CashMovement[]>(
+      'cashMovements',
+      (parsed) => validateCashMovements(parsed),
+      (data) => saveCashMovementsSqlite(data),
+      () => {
+        const res = invokeSqliteSync<CashMovement[]>('getCashMovements')
+        return Boolean(res.success && Array.isArray(res.data) && res.data.length > 0)
+      },
+    )
+    return getCashMovementsSqlite()
+  }
+
+  const raw = safeGetItem('cashMovements')
+  if (!raw) return []
+
+  try {
+    const parsed = JSON.parse(raw)
+    const validated = validateCashMovements(parsed)
+    if (validated) {
+      return validated
+    }
+    quarantineCorruptPayload('cashMovements', raw, 'Invalid cashMovements structure')
+    return []
+  } catch (err) {
+    quarantineCorruptPayload('cashMovements', raw, err instanceof Error ? err.message : 'JSON parse error')
+    return []
+  }
+}
+
+export function saveCashMovementsSafe(movements: CashMovement[]): boolean {
+  try {
+    const json = JSON.stringify(movements)
+    checkMockedStorageProbe('cashMovements', json)
+    if (isSqliteBackendActive()) {
+      return saveCashMovementsSqlite(movements)
+    }
+    return safeSetItem('cashMovements', json)
+  } catch (err) {
+    reportStorageError('cashMovements', err)
     return false
   }
 }

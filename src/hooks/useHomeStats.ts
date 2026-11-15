@@ -1,7 +1,11 @@
 import { useMemo } from 'react'
 import type { CompletedOrder, Table } from '../types'
 import { formatCurrency, isTableOccupied, roundCurrency } from '../lib/format'
-import { getIstanbulParts, getOrderAppliedPayments } from '../lib/businessDay'
+import {
+  getIstanbulParts,
+  getOrderAppliedPayments,
+  selectOrdersForBusinessDay,
+} from '../lib/businessDay'
 
 export interface HomeStats {
   todayRevenue: number
@@ -37,9 +41,16 @@ export function useHomeStats(
     const todayOrders = openBusinessDayId
       ? validOrders.filter((o) => o.businessDayId === openBusinessDayId)
       : validOrders.filter((o) => isSameIstanbulDay(o.date, today))
-    const todayRevenue = roundCurrency(
-      todayOrders.reduce((sum, o) => sum + getOrderAppliedPayments(o).total, 0),
-    )
+    const todayRevenue = openBusinessDayId
+      ? roundCurrency(
+          selectOrdersForBusinessDay(validOrders, openBusinessDayId).reduce(
+            (sum, o) => sum + getOrderAppliedPayments(o, openBusinessDayId).total,
+            0,
+          ),
+        )
+      : roundCurrency(
+          todayOrders.reduce((sum, o) => sum + getOrderAppliedPayments(o).total, 0),
+        )
     const todayOrderCount = todayOrders.length
     const averageBasket = todayOrderCount > 0 ? roundCurrency(todayRevenue / todayOrderCount) : 0
     const occupiedTableCount = tables.filter((t) => isTableOccupied(t)).length

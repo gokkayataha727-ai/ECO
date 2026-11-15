@@ -18,6 +18,7 @@ import {
   RotateCcw,
   Search,
   Clock,
+  Wallet,
 } from 'lucide-react'
 import {
   calculateTotals,
@@ -54,6 +55,8 @@ interface TableLayoutProps {
   canViewAdisyon?: boolean
   canReopenOrder?: boolean
   onRequestReopenOrder?: (orderId: string) => void
+  onOpenCashMovements?: () => void
+  canManageCashMovements?: boolean
   completedOrders?: CompletedOrder[]
   openBusinessDayId?: string
 }
@@ -83,6 +86,8 @@ export function TableLayout({
   canViewAdisyon = true,
   canReopenOrder = false,
   onRequestReopenOrder,
+  onOpenCashMovements,
+  canManageCashMovements = true,
   completedOrders = [],
   openBusinessDayId,
 }: TableLayoutProps) {
@@ -338,6 +343,22 @@ export function TableLayout({
           <p className="muted mt-1">Sipariş almak veya düzenlemek için bir masa seçin.</p>
         </div>
         <div className="flex items-center gap-2">
+          {onOpenCashMovements && (
+            <button
+              type="button"
+              data-testid="tables-cash-movement-btn"
+              onClick={onOpenCashMovements}
+              className="px-3.5 py-2 rounded-xl text-sm font-bold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-800 transition-colors inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+              title={
+                canManageCashMovements
+                  ? 'Kasaya para girişi veya gider çıkışı kaydet'
+                  : 'Kasa hareketleri (Yetki gerekli)'
+              }
+            >
+              <Wallet size={15} />
+              <span>Kasa</span>
+            </button>
+          )}
           {canReopenOrder && onRequestReopenOrder && (
             <button
               type="button"

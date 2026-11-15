@@ -11,6 +11,7 @@ import type {
   User,
 } from '../types'
 import {
+  deriveTableStatus,
   formatCurrency,
   fromKurus,
   isTableOccupied,
@@ -513,7 +514,6 @@ export const healCorruptedReopenedData = (
         if (!p) return false
         // Geri açılmış bir adisyondan "Ödemeyi Koru" ile masaya taşınmış eski ödemeleri temizle
         if (p.id && reopenedPaymentIds.has(p.id)) return false
-        if (p.status === 'IPTAL') return false
         if (!Number.isFinite(p.amount) || toKurus(p.amount) <= 0) return false
         return true
       })
@@ -528,9 +528,13 @@ export const healCorruptedReopenedData = (
     if (filteredPayments.length !== rawPayments.length) {
       healed = true
       healedTablesCount += 1
-      return {
+      const updatedTable = {
         ...table,
         payments: filteredPayments,
+      }
+      return {
+        ...updatedTable,
+        status: deriveTableStatus(updatedTable),
       }
     }
 
@@ -543,5 +547,35 @@ export const healCorruptedReopenedData = (
     healedOrdersCount,
     tables: nextTables,
     completedOrders: nextOrders,
+  }
+}
+
+export interface GhostTableRepairResult {
+  healed: boolean
+  repairedTables: Array<{ id: string; name: string }>
+  tables: Table[]
+}
+
+/**
+ * Uygulama açılışında status: 'occupied' göründüğü halde sepeti, geçerli ödemesi
+ * ve müşteri adı tamamen boş olan hayalet masaları tespit eder, 'empty' durumuna çeker.
+ */
+export const repairGhostOccupiedTables = (tables: Table[]): GhostTableRepairResult => {
+  const repairedTables: Array<{ id: string; name: string }> = []
+  const nextTables = tables.map((table) => {
+    if (table.status === 'occupied' && !isTableOccupied(table)) {
+      repairedTables.push({ id: table.id, name: table.name })
+      return {
+        ...table,
+        status: 'empty' as const,
+      }
+    }
+    return table
+  })
+
+  return {
+    healed: repairedTables.length > 0,
+    repairedTables,
+    tables: nextTables,
   }
 }

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react'
 import { AlertCircle, RotateCcw, X, Banknote, CreditCard, Landmark } from 'lucide-react'
-import { formatCurrency, getEffectivePrice } from '../lib/format'
+import { calculateRefundAmounts, formatCurrency } from '../lib/format'
 import type { CartItem, PaymentMethod, Table } from '../types'
 
 interface RefundModalProps {
@@ -8,6 +8,9 @@ interface RefundModalProps {
   onClose: () => void
   item?: CartItem | null
   table?: Table | null
+  cart?: CartItem[]
+  discountRate?: number
+  discountAmount?: number
   hasPaymentReceived?: boolean
   onConfirmRefund: (params: {
     qty: number
@@ -31,6 +34,9 @@ export function RefundModal({
   onClose,
   item,
   table,
+  cart,
+  discountRate,
+  discountAmount,
   hasPaymentReceived = false,
   onConfirmRefund,
 }: RefundModalProps) {
@@ -51,17 +57,29 @@ export function RefundModal({
 
   if (!isOpen) return null
 
+  const effectiveQty = Math.min(Math.max(1, qty), maxQty)
   const effectiveReason =
     selectedReason === 'Diğer' ? customReason.trim() : selectedReason
 
   const isReasonValid = effectiveReason.length > 0
 
-  const unitPrice = item ? getEffectivePrice(item) : 0
-  const refundAmount = isTableRefund
-    ? (table?.cart || [])
-        .filter((i) => i.status !== 'refunded')
-        .reduce((sum, i) => sum + getEffectivePrice(i) * (i.quantity - (i.refundedQty || 0)), 0)
-    : unitPrice * qty
+  const effectiveCart = cart ?? table?.cart ?? (item ? [item] : [])
+  const effectiveDiscountRate = discountRate ?? table?.discountRate ?? 0
+  const effectiveDiscountAmount = discountAmount ?? table?.discountAmount ?? 0
+
+  const refundBreakdown = calculateRefundAmounts({
+    cart: effectiveCart,
+    discountRate: effectiveDiscountRate,
+    discountAmount: effectiveDiscountAmount,
+    item,
+    qty: effectiveQty,
+    isTableRefund,
+  })
+  const grossAmount = refundBreakdown.grossAmount
+  const refundAmount = refundBreakdown.netAmount
+  const discountShare = refundBreakdown.discountShare
+  const unitGrossPrice = refundBreakdown.unitGrossPrice
+  const unitPrice = refundBreakdown.unitNetPrice
 
   const handleProceed = () => {
     if (!isReasonValid) return
@@ -71,7 +89,7 @@ export function RefundModal({
   const handleFinalSubmit = () => {
     if (!isReasonValid) return
     onConfirmRefund({
-      qty: isTableRefund ? 1 : qty,
+      qty: isTableRefund ? 1 : effectiveQty,
       reason: effectiveReason,
       paymentMethod: hasPaymentReceived ? refundPaymentMethod : undefined,
       isTableRefund,
@@ -131,19 +149,19 @@ export function RefundModal({
                   <div className="flex items-center border border-stone-300 dark:border-stone-700 rounded-xl overflow-hidden bg-stone-50 dark:bg-stone-800">
                     <button
                       type="button"
-                      onClick={() => setQty((q) => Math.max(1, q - 1))}
-                      disabled={qty <= 1}
+                      onClick={() => setQty((q) => Math.max(1, Math.min(q, maxQty) - 1))}
+                      disabled={effectiveQty <= 1}
                       className="px-3.5 py-2 font-bold text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700 disabled:opacity-40 transition-colors"
                     >
                       -
                     </button>
                     <span className="px-4 py-2 font-extrabold text-sm text-stone-900 dark:text-stone-100">
-                      {qty}
+                      {effectiveQty}
                     </span>
                     <button
                       type="button"
                       onClick={() => setQty((q) => Math.min(maxQty, q + 1))}
-                      disabled={qty >= maxQty}
+                      disabled={effectiveQty >= maxQty}
                       className="px-3.5 py-2 font-bold text-stone-700 dark:text-stone-300 hover:bg-stone-200 dark:hover:bg-stone-700 disabled:opacity-40 transition-colors"
                     >
                       +
@@ -238,20 +256,43 @@ export function RefundModal({
             )}
 
             {/* Summary Box */}
-            <div className="p-3.5 rounded-xl bg-rose-50/60 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800/50 flex items-center justify-between">
-              <div>
-                <span className="font-bold text-rose-900 dark:text-rose-200">
-                  Toplam İade Tutarı
+            <div
+              className="p-3.5 rounded-xl bg-rose-50/60 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800/50 space-y-1.5"
+              data-testid="refund-amount-summary"
+            >
+              <div className="flex items-center justify-between text-xs text-stone-600 dark:text-stone-400">
+                <span>
+                  Brüt Tutar
+                  {!isTableRefund && item ? ` (${effectiveQty} adet × ${formatCurrency(unitGrossPrice)})` : ''}
                 </span>
-                <p className="text-[11px] text-rose-700 dark:text-rose-400">
-                  {isTableRefund
-                    ? `${table?.name} tüm siparişi iade edilecek`
-                    : `${qty} adet × ${formatCurrency(unitPrice)}`}
-                </p>
+                <span data-testid="refund-gross-amount">{formatCurrency(grossAmount)}</span>
               </div>
-              <strong className="text-base font-extrabold text-rose-700 dark:text-rose-300">
-                {formatCurrency(refundAmount)}
-              </strong>
+              {discountShare > 0 && (
+                <div className="flex items-center justify-between text-xs text-purple-700 dark:text-purple-300 font-semibold">
+                  <span>İndirim Payı (Kalem + Adisyon)</span>
+                  <span data-testid="refund-discount-share">-{formatCurrency(discountShare)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between pt-1.5 border-t border-rose-200/80 dark:border-rose-800/40">
+                <div>
+                  <span className="font-bold text-rose-900 dark:text-rose-200">
+                    Net İade Tutarı
+                  </span>
+                  <p className="text-[11px] text-rose-700 dark:text-rose-400">
+                    {isTableRefund
+                      ? `${table?.name} fiilen ödenen/net sipariş tutarı iade edilecek`
+                      : discountShare > 0
+                        ? `${effectiveQty} adet × ${formatCurrency(unitPrice)} (indirim düşülmüş net)`
+                        : `${effectiveQty} adet × ${formatCurrency(unitPrice)}`}
+                  </p>
+                </div>
+                <strong
+                  className="text-base font-extrabold text-rose-700 dark:text-rose-300"
+                  data-testid="refund-net-amount"
+                >
+                  {formatCurrency(refundAmount)}
+                </strong>
+              </div>
             </div>
 
             {/* Actions */}
@@ -285,8 +326,8 @@ export function RefundModal({
               </h3>
               <p className="text-xs text-stone-600 dark:text-stone-400 mt-1">
                 {isTableRefund
-                  ? `${table?.name} masasının tüm siparişi (${formatCurrency(refundAmount)}) iade olarak kaydedilecektir.`
-                  : `${qty} adet ${item?.name} (${formatCurrency(refundAmount)}) iade edilecek.`}
+                  ? `${table?.name} masasının tüm siparişi (Net: ${formatCurrency(refundAmount)}${discountShare > 0 ? `, Brüt: ${formatCurrency(grossAmount)}` : ''}) iade olarak kaydedilecektir.`
+                  : `${effectiveQty} adet ${item?.name} (Net: ${formatCurrency(refundAmount)}${discountShare > 0 ? `, Brüt: ${formatCurrency(grossAmount)}` : ''}) iade edilecek.`}
               </p>
               <div className="mt-2 text-xs font-semibold text-rose-700 dark:text-rose-300">
                 Neden: "{effectiveReason}"

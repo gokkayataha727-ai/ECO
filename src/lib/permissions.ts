@@ -229,6 +229,14 @@ export const PERMISSION_CATALOG: PermissionCatalogItem[] = [
     defaultTemplateVal: false,
     sensitive: true,
   },
+  {
+    key: 'cash_movement_manage',
+    label: 'Kasaya para giriş/çıkış hareketi girme',
+    description: 'Açık iş gününde kasaya doğrudan nakit girişi veya gider çıkışı kaydedebilir/iptal edebilir.',
+    group: 'business_day',
+    defaultTemplateVal: false,
+    sensitive: true,
+  },
 
   // ── Ürün & Menü ──
   {
@@ -387,6 +395,10 @@ export function buildDefaultTemplate(settings?: AppSettings): Record<PermissionK
     if (settings.allowWaiterReopen !== undefined) {
       t.reopen_order = Boolean(settings.allowWaiterReopen)
     }
+
+    if (settings.allowWaiterCashMovement !== undefined) {
+      t.cash_movement_manage = Boolean(settings.allowWaiterCashMovement)
+    }
   }
 
   return t as Record<PermissionKey, boolean>
@@ -462,6 +474,7 @@ export function savePermissionTemplate(
     s.allowWaiterRefund = Boolean(template.refund_item && template.refund_table)
     s.allowWaiterDayManagement = Boolean(template.day_open && template.day_close)
     s.allowWaiterReopen = Boolean(template.reopen_order)
+    s.allowWaiterCashMovement = Boolean(template.cash_movement_manage)
     saveSettingsSafe(s)
   } catch {
     // ignore

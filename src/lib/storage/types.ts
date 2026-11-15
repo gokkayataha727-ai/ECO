@@ -1,6 +1,7 @@
 import type {
   AppSettings,
   BusinessDay,
+  CashMovement,
   CompletedOrder,
   Product,
   Refund,
@@ -22,6 +23,7 @@ export interface POSBackupPayload {
   refunds: Refund[]
   activityLogs: ActivityLog[]
   appUsers: User[]
+  cashMovements?: CashMovement[]
   initialWaitstaffPins?: WaitstaffPinRecord[]
   waitstaffPermissionTemplate?: Record<string, boolean>
   userPermissionOverrides?: Record<string, Record<string, boolean>>

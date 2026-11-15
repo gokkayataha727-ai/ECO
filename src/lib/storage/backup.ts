@@ -12,6 +12,7 @@ import { computeChecksum } from './checksum'
 import {
   getActivityLogsSafe,
   getBusinessDaysSafe,
+  getCashMovementsSafe,
   getCompletedOrdersSafe,
   getMenuProductsSafe,
   getRefundsSafe,
@@ -24,6 +25,7 @@ import {
   safeSetItem,
   saveActivityLogsSafe,
   saveBusinessDaysSafe,
+  saveCashMovementsSafe,
   saveCompletedOrdersSafe,
   saveMenuProductsSafe,
   saveRefundsSafe,
@@ -32,7 +34,7 @@ import {
   saveUserPermissionOverridesSafe,
   saveUsersSafe,
 } from './repository'
-import { validateBackupFileStructure } from './validators'
+import { validateBackupFileStructure, validateCashMovements } from './validators'
 import { logActivity } from '../activityLog'
 
 const PRE_RESTORE_BACKUP_KEY = 'storage_pre_restore_backup'
@@ -76,6 +78,7 @@ export function getFullBackupPayload(): POSBackupPayload {
     refunds: getRefundsSafe(),
     activityLogs: getActivityLogsSafe(),
     appUsers: getUsersSafe(),
+    cashMovements: getCashMovementsSafe(),
     initialWaitstaffPins: pins,
     waitstaffPermissionTemplate: template,
     userPermissionOverrides: overrides,
@@ -177,6 +180,12 @@ export function restoreFromBackup(
 
     if (Array.isArray(data.refunds)) {
       saveRefundsSafe(data.refunds)
+    }
+    if (Array.isArray(data.cashMovements)) {
+      saveCashMovementsSafe(validateCashMovements(data.cashMovements) || [])
+    } else {
+      // Eski yedeklerde cashMovements yoksa temiz başlat
+      saveCashMovementsSafe([])
     }
     if (Array.isArray(data.activityLogs)) {
       saveActivityLogsSafe(data.activityLogs)

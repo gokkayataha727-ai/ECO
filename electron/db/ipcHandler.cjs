@@ -11,6 +11,8 @@ const {
   saveSettings,
   getRefunds,
   saveRefunds,
+  getCashMovements,
+  saveCashMovements,
   getActivityLogs,
   saveActivityLogs,
   prependActivityLog,
@@ -129,6 +131,13 @@ function executeDbAction(dbContext, action, payload) {
 
       case 'saveRefunds':
         saveRefunds(db, payload)
+        return { success: true }
+
+      case 'getCashMovements':
+        return { success: true, data: getCashMovements(db) }
+
+      case 'saveCashMovements':
+        saveCashMovements(db, payload)
         return { success: true }
 
       case 'getActivityLogs':

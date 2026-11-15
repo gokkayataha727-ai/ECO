@@ -8,6 +8,7 @@ const {
   saveBusinessDays,
   saveMenuProducts,
   saveRefunds,
+  saveCashMovements,
   saveActivityLogs,
   saveUsers,
   saveUserPermissionOverridesMap,
@@ -223,6 +224,9 @@ function verifyPayloadKurusPrecision(payload) {
   for (const r of payload.refunds || []) {
     checkVal(r.amount, `refund[${r.id}].amount`)
   }
+  for (const cm of payload.cashMovements || []) {
+    checkVal(cm.amount, `cashMovement[${cm.id}].amount`)
+  }
   for (const d of payload.businessDays || []) {
     checkVal(d.openingCash, `businessDay[${d.id}].openingCash`)
     checkVal(d.closingCash, `businessDay[${d.id}].closingCash`)
@@ -383,6 +387,10 @@ function migratePayloadToSqlite(db, payload, options = {}) {
 
       if (Array.isArray(payload.refunds)) {
         saveRefunds(db, payload.refunds)
+      }
+
+      if (Array.isArray(payload.cashMovements)) {
+        saveCashMovements(db, payload.cashMovements)
       }
 
       if (Array.isArray(payload.activityLogs)) {

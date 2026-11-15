@@ -2,6 +2,7 @@ import type {
   ActivityLog,
   AppSettings,
   BusinessDay,
+  CashMovement,
   CompletedOrder,
   Product,
   Refund,
@@ -272,6 +273,26 @@ export function saveRefundsSqlite(refunds: Refund[]): boolean {
   const res = invokeSqliteSync('saveRefunds', refunds)
   if (!res.success) {
     emitCriticalStorageError('refunds', res.error || 'İadeler SQLite veritabanına yazılamadı.')
+    return false
+  }
+  return true
+}
+
+export function getCashMovementsSqlite(): CashMovement[] {
+  const res = invokeSqliteSync<CashMovement[]>('getCashMovements')
+  if (res.success && Array.isArray(res.data)) {
+    return res.data
+  }
+  return []
+}
+
+export function saveCashMovementsSqlite(movements: CashMovement[]): boolean {
+  const res = invokeSqliteSync('saveCashMovements', movements)
+  if (!res.success) {
+    emitCriticalStorageError(
+      'cashMovements',
+      res.error || 'Kasa hareketleri SQLite veritabanına yazılamadı.',
+    )
     return false
   }
   return true

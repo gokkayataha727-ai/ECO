@@ -295,9 +295,188 @@ export const paymentMethodLabel = (method: PaymentMethod) => {
 
 export const isTableOccupied = (table: Table): boolean => {
   const hasCustomer = Boolean(table.customerName && table.customerName.trim().length > 0)
-  const activeItems = table.cart.filter((item) => item.status !== 'refunded')
-  const validPayments = (table.payments || []).filter((p) => isValidPaymentMovement(p) && p.type !== 'IADE')
-  return activeItems.length > 0 || (table.cart.length > 0 && validPayments.length > 0) || table.status === 'occupied' || hasCustomer
+  const activeItems = (table.cart || []).filter((item) => item.status !== 'refunded')
+  const { paidTotal } = derivePaymentState(0, table.payments || [])
+  return activeItems.length > 0 || paidTotal > 0 || hasCustomer
+}
+
+export const deriveTableStatus = (table: Table): 'occupied' | 'empty' =>
+  isTableOccupied(table) ? 'occupied' : 'empty'
+
+export interface RefundItemDetailBreakdown {
+  productId: string
+  name: string
+  quantity: number
+  unitPrice: number
+  grossTotal: number
+  totalPrice: number
+}
+
+export interface RefundAmountBreakdown {
+  grossAmount: number
+  netAmount: number
+  discountShare: number
+  unitGrossPrice: number
+  unitNetPrice: number
+  itemDetails: RefundItemDetailBreakdown[]
+}
+
+/**
+ * İade tutarını kalemin veya masanın fiilen ödenen net payından hesaplar
+ * (kalem indirimi + oransal adisyon indirim payı düşülmüş).
+ */
+export const calculateRefundAmounts = (params: {
+  cart?: CartItem[]
+  discountRate?: number
+  discountAmount?: number
+  item?: CartItem | null
+  qty?: number
+  isTableRefund?: boolean
+}): RefundAmountBreakdown => {
+  const {
+    cart = [],
+    discountRate = 0,
+    discountAmount = 0,
+    item = null,
+    qty = 1,
+    isTableRefund = false,
+  } = params
+
+  const getActiveQty = (c: CartItem) => Math.max(0, c.quantity - (c.refundedQty || 0))
+  const getScaledLineAfterItemDisc = (c: CartItem) => {
+    if (c.status === 'refunded' && !c.refundedQty) return 0
+    const activeQty = getActiveQty(c)
+    if (activeQty <= 0 || c.quantity <= 0) return 0
+    return (getLineAfterItemDiscount(c) / c.quantity) * activeQty
+  }
+
+  const effectiveCart = cart.length > 0 ? cart : item ? [item] : []
+  const activeItems = effectiveCart.filter((c) => c.status !== 'refunded' && getActiveQty(c) > 0)
+
+  const calculateProportionalLineNets = (itemsList: CartItem[], targetTotal: number): number[] => {
+    const rawWeights = itemsList.map((c) => getScaledLineAfterItemDisc(c))
+    const totalWeight = rawWeights.reduce((sum, w) => sum + w, 0)
+    if (totalWeight <= 0) return itemsList.map(() => 0)
+
+    let lastActiveIdx = -1
+    for (let i = rawWeights.length - 1; i >= 0; i--) {
+      if (rawWeights[i] > 0) {
+        lastActiveIdx = i
+        break
+      }
+    }
+
+    const cleanTarget = roundCurrency(targetTotal)
+    let running = 0
+    return rawWeights.map((w, idx) => {
+      if (w <= 0) return 0
+      if (idx === lastActiveIdx) {
+        return Math.max(0, roundCurrency(cleanTarget - running))
+      }
+      const share = roundCurrency((w / totalWeight) * cleanTarget)
+      running = roundCurrency(running + share)
+      return share
+    })
+  }
+
+  const normalizedActiveForTotals = activeItems.map((c) => {
+    const activeQty = getActiveQty(c)
+    if (activeQty === c.quantity) return c
+    const ratio = c.quantity > 0 ? activeQty / c.quantity : 0
+    return {
+      ...c,
+      quantity: activeQty,
+      ...(c.itemDiscount && c.itemDiscount.type === 'amount'
+        ? { itemDiscount: { ...c.itemDiscount, value: roundCurrency(c.itemDiscount.value * ratio) } }
+        : {}),
+    }
+  })
+  const cartTotals = calculateTotals(normalizedActiveForTotals, discountRate, discountAmount)
+  const lineNets = calculateProportionalLineNets(activeItems, cartTotals.total)
+
+  if (isTableRefund) {
+    const grossAmount = roundCurrency(
+      activeItems.reduce((sum, c) => sum + getEffectivePrice(c) * getActiveQty(c), 0),
+    )
+    const netAmount = roundCurrency(cartTotals.total)
+    const discountShare = Math.max(0, roundCurrency(grossAmount - netAmount))
+    const itemDetails: RefundItemDetailBreakdown[] = activeItems.map((c, idx) => {
+      const q = getActiveQty(c)
+      const grossTotal = roundCurrency(getEffectivePrice(c) * q)
+      const totalPrice = roundCurrency(lineNets[idx] ?? 0)
+      return {
+        productId: c.id,
+        name: c.name,
+        quantity: q,
+        unitPrice: q > 0 ? roundCurrency(totalPrice / q) : 0,
+        grossTotal,
+        totalPrice,
+      }
+    })
+    return {
+      grossAmount,
+      netAmount,
+      discountShare,
+      unitGrossPrice: 0,
+      unitNetPrice: 0,
+      itemDetails,
+    }
+  }
+
+  if (!item) {
+    return {
+      grossAmount: 0,
+      netAmount: 0,
+      discountShare: 0,
+      unitGrossPrice: 0,
+      unitNetPrice: 0,
+      itemDetails: [],
+    }
+  }
+
+  const targetIdx = activeItems.findIndex((c) => c.cartItemId === item.cartItemId)
+  const targetActiveItem = targetIdx >= 0 ? activeItems[targetIdx] : item
+  const activeQty = Math.max(1, getActiveQty(targetActiveItem))
+  const refundQty = Math.min(Math.max(1, qty), activeQty)
+  const unitGrossPrice = getEffectivePrice(targetActiveItem)
+  const grossAmount = roundCurrency(unitGrossPrice * refundQty)
+
+  let lineNetTotal: number
+  if (targetIdx >= 0) {
+    lineNetTotal = lineNets[targetIdx]
+  } else {
+    const fallbackTotals = calculateTotals(
+      [{ ...targetActiveItem, quantity: activeQty }],
+      discountRate,
+      discountAmount,
+    )
+    lineNetTotal = roundCurrency(fallbackTotals.total)
+  }
+
+  const netAmount =
+    refundQty >= activeQty
+      ? roundCurrency(lineNetTotal)
+      : roundCurrency((lineNetTotal / activeQty) * refundQty)
+  const unitNetPrice = refundQty > 0 ? roundCurrency(netAmount / refundQty) : 0
+  const discountShare = Math.max(0, roundCurrency(grossAmount - netAmount))
+
+  return {
+    grossAmount,
+    netAmount,
+    discountShare,
+    unitGrossPrice,
+    unitNetPrice,
+    itemDetails: [
+      {
+        productId: targetActiveItem.id,
+        name: targetActiveItem.name,
+        quantity: refundQty,
+        unitPrice: unitNetPrice,
+        grossTotal: grossAmount,
+        totalPrice: netAmount,
+      },
+    ],
+  }
 }
 
 export interface LinePaymentState {
@@ -353,13 +532,18 @@ export const deriveLinePaymentStates = (
     let lastMethod: 'card' | 'cash' | 'iban' | undefined
 
     for (const p of payments) {
-      if (!isValidPaymentMovement(p) || p.type === 'IADE') continue
+      if (!isValidPaymentMovement(p)) continue
       if (!p.items) continue
       for (const pi of p.items) {
         if (pi.lineId === item.cartItemId) {
-          rawPaidQty += pi.quantity
-          rawPaidAmount += pi.amount
-          lastMethod = normalizePaymentMethod(p.method)
+          if (p.type === 'IADE') {
+            rawPaidQty = Math.max(0, rawPaidQty - pi.quantity)
+            rawPaidAmount = Math.max(0, rawPaidAmount - pi.amount)
+          } else {
+            rawPaidQty += pi.quantity
+            rawPaidAmount += pi.amount
+            lastMethod = normalizePaymentMethod(p.method)
+          }
         }
       }
     }

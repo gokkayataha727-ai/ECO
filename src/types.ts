@@ -66,10 +66,13 @@ export interface Refund {
   productName?: string
   quantity?: number
   unitPrice?: number
+  grossAmount?: number
   amount: number
   paymentMethod?: PaymentMethod
   /** Bu iadenin gerçekten kasadan/karttan/IBAN'dan tahsil edilmiş bir ödemenin geri ödemesi olup olmadığı */
   paymentReceived?: boolean
+  /** Bu iade için oluşturulan IADE ödeme hareketi kaydının ID'si (çift düşümü önlemek için kullanılır) */
+  paymentMovementId?: string
   reason: string
   createdAt?: string
   createdBy?: string
@@ -93,6 +96,7 @@ export type ActivityLogType =
   | 'table_refund'
   | 'order_reopen'
   | 'payment'
+  | 'payment_cancel'
   | 'discount'
   | 'item_discount'
   | 'order_discount'
@@ -122,6 +126,8 @@ export type ActivityLogType =
   | 'log_chain_broken'
   | 'log_archive'
   | 'crash_recovery'
+  | 'cash_movement_add'
+  | 'cash_movement_cancel'
 
 export interface ActivityLog {
   id: string
@@ -187,6 +193,7 @@ export interface PartialPayment {
   userId?: string
   isManualAmount?: boolean
   selectedItemsTotal?: number
+  reason?: string
   cancelledReason?: string
   cancelledBy?: string
   cancelledAt?: string
@@ -320,6 +327,23 @@ export interface BusinessDayReportSnapshot {
     cash: number
     iban: number
   }
+  /** Kasa nakit kırılımı için brüt nakit tahsilat ve nakit iade detayları */
+  cashDrawerBreakdown?: {
+    /** Kapanmış (geçerli) adisyonlardan alınan brüt nakit tahsilat */
+    closedCashGross: number
+    /** Açık masalardan alınan brüt nakit ara ödemeler */
+    openTableCashGross: number
+    /** Kapanmış adisyonlara ait kasadan ödenen nakit iadeler */
+    closedCashRefunds: number
+    /** Açık masalara ait kasadan ödenen nakit iadeler */
+    openTableCashRefunds: number
+    /** Toplam kasadan yapılan nakit iadeler */
+    totalCashRefunds: number
+    /** Kasaya doğrudan eklenen nakit girişleri toplamı (iptal edilmemişler) */
+    cashInTotal?: number
+    /** Kasadan yapılan doğrudan nakit çıkışları/giderleri toplamı (iptal edilmemişler) */
+    cashOutTotal?: number
+  }
   soldProducts: SoldProductReportItem[]
   categorySales: CategorySalesItem[]
   hourlySales: HourlySalesItem[]
@@ -329,8 +353,16 @@ export interface BusinessDayReportSnapshot {
     cash: number
     iban: number
   }
+  /** Günü kapanmış önceki günlerden devreden masa/adisyon tahsilatları (bugünün toplamlarına sessizce karıştırılmaz, geçmiş arşiv değiştirilmez) */
+  previousDayCarryoverCollection?: number
+  previousDayCarryoverByMethod?: {
+    card: number
+    cash: number
+    iban: number
+  }
   // POS Z Report & Refunds
   expectedZ?: number
+  /** POS Z farkı */
   enteredZ?: number
   zDifference?: number
   totalRefunds?: number
@@ -339,12 +371,42 @@ export interface BusinessDayReportSnapshot {
   paidRefundsTotal?: number
   /** Henüz ödeme alınmadan yapılan mutfak/sipariş iadeleri toplamı */
   unpaidRefundsTotal?: number
+  /** Gün içi aktif kasa girişleri toplamı */
+  cashInTotal?: number
+  /** Gün içi aktif kasa çıkışları toplamı */
+  cashOutTotal?: number
+  /** Gün içi aktif kasa hareketi adedi */
+  cashMovementsCount?: number
+  /** Gün sonu kapatıldığında dondurulan gün içi kasa hareketleri arşivi */
+  cashMovements?: CashMovement[]
+  /** İade/negatif bakiye kırpılması nedeniyle 0'a çekilen açıklanamayan toplam fark */
+  unexplainedDifference?: number
+  /** Kırpılma / veri tutarsızlığı açıklamaları */
+  unexplainedDetails?: string[]
   // Legacy fields kept optional for backward compatibility
   posZCutoffTime?: string
   cardCarryIn?: number
   cardBeforeCutoff?: number
   cardAfterCutoff?: number
   cardCarryOut?: number
+}
+
+export type CashMovementType = 'GIRIS' | 'CIKIS'
+
+export interface CashMovement {
+  id: string
+  businessDayId: string
+  type: CashMovementType
+  amount: number
+  category: string
+  description: string
+  createdAt: string
+  createdBy: string
+  userId?: string
+  cancelled?: boolean
+  cancelledAt?: string
+  cancelledBy?: string
+  cancelledReason?: string
 }
 
 export interface BusinessDay {
@@ -359,6 +421,8 @@ export interface BusinessDay {
   closingCash?: number
   expectedCash?: number
   cashDifference?: number
+  cashDifferenceNote?: string
+  usedExpectedCash?: boolean
   note?: string
   closeNote?: string
   report?: BusinessDayReportSnapshot
@@ -425,6 +489,7 @@ export type PermissionKey =
   // Gün & Kasa
   | 'day_open'
   | 'day_close'
+  | 'cash_movement_manage'
   // Ürün & Menü
   | 'product_manage'
   | 'product_price_edit'
@@ -452,6 +517,7 @@ export interface RolePermissions {
   allowWaiterRefund?: boolean
   allowWaiterReopen?: boolean
   allowWaiterDayManagement?: boolean
+  allowWaiterCashMovement?: boolean
 }
 
 export interface AppSettings {
@@ -473,6 +539,7 @@ export interface AppSettings {
   allowWaiterRefund?: boolean
   allowWaiterReopen?: boolean
   allowWaiterDayManagement?: boolean
+  allowWaiterCashMovement?: boolean
   sessionTimeoutMinutes?: number
   waiterSessionTimeoutMinutes?: number
   adminSessionTimeoutMinutes?: number

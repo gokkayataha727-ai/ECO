@@ -294,7 +294,7 @@ function insertPaymentsForOrder(db, orderId, tableId, payments) {
       paid_items_json: paidItemsJson,
       type: p.type === 'IADE' ? 'IADE' : 'ODEME',
       status: p.status === 'IPTAL' ? 'IPTAL' : 'GECERLI',
-      cancelled_reason: p.cancelledReason ?? null,
+      cancelled_reason: p.cancelledReason ?? p.reason ?? null,
       cancelled_by: p.cancelledBy ?? null,
       cancelled_at: p.cancelledAt ?? null,
       reversal_of_id: p.reversalOfId ?? null,
@@ -326,7 +326,10 @@ function mapRowToPayment(row) {
   if (row.business_day_id) payment.businessDayId = row.business_day_id
   if (row.cashier) payment.cashier = row.cashier
   if (row.user_id) payment.userId = row.user_id
-  if (row.cancelled_reason) payment.cancelledReason = row.cancelled_reason
+  if (row.cancelled_reason) {
+    payment.cancelledReason = row.cancelled_reason
+    payment.reason = row.cancelled_reason
+  }
   if (row.cancelled_by) payment.cancelledBy = row.cancelled_by
   if (row.cancelled_at) payment.cancelledAt = row.cancelled_at
   if (row.reversal_of_id) payment.reversalOfId = row.reversal_of_id
@@ -678,6 +681,7 @@ function deserializeReportSnapshot(zRow) {
 }
 
 function getBusinessDays(db) {
+  ensureActivityLogChainSchema(db)
   const rows = db
     .prepare('SELECT * FROM business_days ORDER BY sort_order ASC, rowid ASC')
     .all()
@@ -716,6 +720,10 @@ function getBusinessDays(db) {
     const diff = fromKurusOptional(row.cash_difference_kurus)
     if (diff !== undefined) day.cashDifference = diff
 
+    if (row.cash_difference_note !== null && row.cash_difference_note !== undefined) {
+      day.cashDifferenceNote = row.cash_difference_note
+    }
+
     if (row.note !== null && row.note !== undefined) day.note = row.note
     if (row.close_note !== null && row.close_note !== undefined) day.closeNote = row.close_note
 
@@ -745,6 +753,7 @@ function upsertSingleBusinessDay(db, day, sortOrder = 0) {
     'cardCarryOut',
     'cardBeforeCutoff',
     'cardAfterCutoff',
+    'usedExpectedCash',
   ]
   for (const key of legacyFields) {
     if (day[key] !== undefined) extra[key] = day[key]
@@ -754,12 +763,12 @@ function upsertSingleBusinessDay(db, day, sortOrder = 0) {
     INSERT INTO business_days (
       id, status, opened_at, opened_by, opening_cash_kurus,
       closed_at, closed_by, counted_cash_kurus, closing_cash_kurus,
-      expected_cash_kurus, cash_difference_kurus, note, close_note,
+      expected_cash_kurus, cash_difference_kurus, cash_difference_note, note, close_note,
       expected_z_kurus, entered_z_kurus, z_difference_kurus, extra_json, sort_order
     ) VALUES (
       @id, @status, @opened_at, @opened_by, @opening_cash_kurus,
       @closed_at, @closed_by, @counted_cash_kurus, @closing_cash_kurus,
-      @expected_cash_kurus, @cash_difference_kurus, @note, @close_note,
+      @expected_cash_kurus, @cash_difference_kurus, @cash_difference_note, @note, @close_note,
       @expected_z_kurus, @entered_z_kurus, @z_difference_kurus, @extra_json, @sort_order
     )
     ON CONFLICT(id) DO UPDATE SET
@@ -773,6 +782,7 @@ function upsertSingleBusinessDay(db, day, sortOrder = 0) {
       closing_cash_kurus = excluded.closing_cash_kurus,
       expected_cash_kurus = excluded.expected_cash_kurus,
       cash_difference_kurus = excluded.cash_difference_kurus,
+      cash_difference_note = excluded.cash_difference_note,
       note = excluded.note,
       close_note = excluded.close_note,
       expected_z_kurus = excluded.expected_z_kurus,
@@ -792,6 +802,7 @@ function upsertSingleBusinessDay(db, day, sortOrder = 0) {
     closing_cash_kurus: toKurusNullable(day.closingCash),
     expected_cash_kurus: toKurusNullable(day.expectedCash),
     cash_difference_kurus: toKurusNullable(day.cashDifference),
+    cash_difference_note: day.cashDifferenceNote ?? null,
     note: day.note ?? null,
     close_note: day.closeNote ?? null,
     expected_z_kurus: toKurusNullable(day.expectedZ),
@@ -864,6 +875,7 @@ function saveBusinessDays(db, days) {
   if (!Array.isArray(days)) {
     throw new Error('businessDays dizi (array) olmalıdır.')
   }
+  ensureActivityLogChainSchema(db)
 
   const run = db.transaction((list) => {
     db.prepare('DELETE FROM z_reports').run()
@@ -973,6 +985,9 @@ function getRefunds(db) {
     if (row.payment_received !== null && row.payment_received !== undefined) {
       refund.paymentReceived = Boolean(row.payment_received)
     }
+    if (row.payment_movement_id) {
+      refund.paymentMovementId = row.payment_movement_id
+    }
     if (row.created_at) refund.createdAt = row.created_at
     if (row.created_by) refund.createdBy = row.created_by
     if (row.refunded_at) refund.refundedAt = row.refunded_at
@@ -1022,12 +1037,12 @@ function insertSingleRefund(db, r, sortOrder = 0) {
     INSERT INTO refunds (
       id, business_day_id, order_id, table_id, table_name,
       order_item_id, product_name, quantity, unit_price_kurus,
-      amount_kurus, payment_method, payment_received, reason,
+      amount_kurus, payment_method, payment_received, payment_movement_id, reason,
       created_at, created_by, refunded_at, refunded_by, items_json, sort_order
     ) VALUES (
       @id, @business_day_id, @order_id, @table_id, @table_name,
       @order_item_id, @product_name, @quantity, @unit_price_kurus,
-      @amount_kurus, @payment_method, @payment_received, @reason,
+      @amount_kurus, @payment_method, @payment_received, @payment_movement_id, @reason,
       @created_at, @created_by, @refunded_at, @refunded_by, @items_json, @sort_order
     )
   `).run({
@@ -1044,6 +1059,7 @@ function insertSingleRefund(db, r, sortOrder = 0) {
     payment_method: r.paymentMethod ? normalizePaymentMethodCjs(r.paymentMethod, 'cash') : null,
     payment_received:
       typeof r.paymentReceived === 'boolean' ? (r.paymentReceived ? 1 : 0) : null,
+    payment_movement_id: r.paymentMovementId ?? null,
     reason: r.reason || 'İade',
     created_at: r.createdAt ?? null,
     created_by: r.createdBy ?? null,
@@ -1067,6 +1083,71 @@ function saveRefunds(db, refunds) {
   })
 
   run(refunds)
+  return true
+}
+
+// ────────────────────────────────────────────────────────────
+// 5b. Cash Movements Repository
+// ────────────────────────────────────────────────────────────
+
+function getCashMovements(db) {
+  ensureActivityLogChainSchema(db)
+  const rows = db.prepare('SELECT * FROM cash_movements ORDER BY sort_order ASC, created_at DESC').all()
+  return rows.map((row) => ({
+    id: row.id,
+    businessDayId: row.business_day_id,
+    type: row.type === 'GIRIS' ? 'GIRIS' : 'CIKIS',
+    amount: fromKurus(row.amount_kurus),
+    category: row.category,
+    description: row.description,
+    createdAt: row.created_at,
+    createdBy: row.created_by,
+    ...(row.user_id ? { userId: row.user_id } : {}),
+    ...(row.cancelled ? { cancelled: true } : {}),
+    ...(row.cancelled_at ? { cancelledAt: row.cancelled_at } : {}),
+    ...(row.cancelled_by ? { cancelledBy: row.cancelled_by } : {}),
+    ...(row.cancelled_reason ? { cancelledReason: row.cancelled_reason } : {}),
+  }))
+}
+
+function saveCashMovements(db, movements) {
+  if (!Array.isArray(movements)) {
+    throw new Error('cashMovements dizi (array) olmalıdır.')
+  }
+  ensureActivityLogChainSchema(db)
+  const insertStmt = db.prepare(`
+    INSERT INTO cash_movements (
+      id, business_day_id, type, amount_kurus, category, description,
+      created_at, created_by, user_id, cancelled, cancelled_at, cancelled_by,
+      cancelled_reason, sort_order
+    ) VALUES (
+      @id, @business_day_id, @type, @amount_kurus, @category, @description,
+      @created_at, @created_by, @user_id, @cancelled, @cancelled_at, @cancelled_by,
+      @cancelled_reason, @sort_order
+    )
+  `)
+  const run = db.transaction((list) => {
+    db.prepare('DELETE FROM cash_movements').run()
+    list.forEach((m, idx) => {
+      insertStmt.run({
+        id: m.id,
+        business_day_id: m.businessDayId,
+        type: m.type === 'GIRIS' ? 'GIRIS' : 'CIKIS',
+        amount_kurus: Math.max(0, toKurus(m.amount)),
+        category: m.category || 'Diğer',
+        description: m.description || '',
+        created_at: m.createdAt || new Date().toISOString(),
+        created_by: m.createdBy || 'Kasiyer',
+        user_id: m.userId ?? null,
+        cancelled: m.cancelled ? 1 : 0,
+        cancelled_at: m.cancelledAt ?? null,
+        cancelled_by: m.cancelledBy ?? null,
+        cancelled_reason: m.cancelledReason ?? null,
+        sort_order: idx,
+      })
+    })
+  })
+  run(movements)
   return true
 }
 
@@ -1530,6 +1611,7 @@ function getAllDatabaseState(db) {
     menuProducts: getMenuProducts(db),
     appSettings: getSettings(db),
     refunds: getRefunds(db),
+    cashMovements: getCashMovements(db),
     activityLogs: getActivityLogs(db),
     appUsers: getUsers(db),
     userPermissionOverrides: permOverrides,
@@ -1552,6 +1634,9 @@ function clearAllOperationalData(db) {
     db.prepare('DELETE FROM tables').run()
     db.prepare('DELETE FROM products').run()
     db.prepare('DELETE FROM refunds').run()
+    try {
+      db.prepare('DELETE FROM cash_movements').run()
+    } catch {}
     db.prepare('DELETE FROM activity_logs').run()
     try {
       db.prepare('DELETE FROM activity_logs_archive').run()
@@ -1591,6 +1676,8 @@ module.exports = {
   saveMenuProducts,
   getRefunds,
   saveRefunds,
+  getCashMovements,
+  saveCashMovements,
   getActivityLogs,
   saveActivityLogs,
   getUsers,

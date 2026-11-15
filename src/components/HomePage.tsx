@@ -11,10 +11,12 @@ import {
   Clock,
   Sun,
   Moon,
+  Wallet,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { AppLogo } from './AppLogo'
 import { useHomeStats } from '../hooks/useHomeStats'
+import { getOpenBusinessDayDurationAlert } from '../lib/businessDay'
 import { formatCurrency, paymentMethodLabel } from '../lib/format'
 import { can } from '../lib/permissions'
 import type { AppSettings, BusinessDay, CompletedOrder, Session, Table } from '../types'
@@ -28,6 +30,7 @@ interface HomePageProps {
   onViewChange: (view: 'tables' | 'pos' | 'home') => void
   onOpenSummary: () => void
   onOpenProducts: () => void
+  onOpenCashMovements?: () => void
   settings?: AppSettings
   currentSession?: Session | null
 }
@@ -65,6 +68,7 @@ export function HomePage({
   onViewChange,
   onOpenSummary,
   onOpenProducts,
+  onOpenCashMovements,
   settings,
   currentSession,
 }: HomePageProps) {
@@ -88,6 +92,7 @@ export function HomePage({
   }, [])
 
   const recentOrders = completedOrders.filter((o) => !o.cancelled).slice(0, 5)
+  const durationAlert = getOpenBusinessDayDurationAlert(openBusinessDay, now)
 
   const kpis = [
     {
@@ -123,6 +128,16 @@ export function HomePage({
       desc: 'Masa durumlarını gör',
       action: () => onViewChange('tables'),
     },
+    ...(onOpenCashMovements
+      ? [
+          {
+            icon: Wallet,
+            title: 'Kasa Hareketleri',
+            desc: 'Gider çıkışı & kasa girişi',
+            action: () => onOpenCashMovements(),
+          },
+        ]
+      : []),
     ...(canManageProducts
       ? [
           {
@@ -137,6 +152,18 @@ export function HomePage({
 
   return (
     <div className="home-container">
+      {durationAlert && (
+        <div
+          role="status"
+          aria-live="polite"
+          data-testid="home-multiday-open-alert"
+          className="mb-3 px-4 py-2.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-bold flex items-center gap-2"
+        >
+          <Clock size={15} className="text-amber-600 shrink-0" />
+          <span>{durationAlert.message}</span>
+        </div>
+      )}
+
       {/* ── Welcome Card ── */}
       <div className="welcome-card surface" style={{ animationDelay: '0s' }}>
         <div className="welcome-left">

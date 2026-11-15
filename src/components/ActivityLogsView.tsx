@@ -162,7 +162,7 @@ export function ActivityLogsView({
           )
             return false
         } else if (selectedTypeFilter === 'payments') {
-          if (log.type !== 'payment') return false
+          if (log.type !== 'payment' && log.type !== 'payment_cancel') return false
         } else if (selectedTypeFilter === 'auth') {
           if (
             log.type !== 'login' &&
@@ -204,6 +204,8 @@ export function ActivityLogsView({
             return false
         } else if (selectedTypeFilter === 'days') {
           if (log.type !== 'day_open' && log.type !== 'day_close') return false
+        } else if (selectedTypeFilter === 'cash_movements') {
+          if (log.type !== 'cash_movement_add' && log.type !== 'cash_movement_cancel') return false
         } else if (log.type !== selectedTypeFilter) {
           return false
         }
@@ -247,6 +249,7 @@ export function ActivityLogsView({
     })
   }, [
     logs,
+    allUsers,
     selectedDayFilter,
     selectedTypeFilter,
     selectedTableFilter,
@@ -477,6 +480,7 @@ export function ActivityLogsView({
               <option value="discount">🏷️ İndirimler</option>
               <option value="tables">🪑 Masa Hareketleri (Taşıma/Birleştirme)</option>
               <option value="days">☀️ Gün Açma / Kapama</option>
+              <option value="cash_movements">💵 Kasa Giriş / Çıkış Hareketleri</option>
               <option value="auth">🔐 Giriş / Çıkış / Oturum</option>
               <option value="user_mgmt">👤 Personel / Kullanıcı Yönetimi</option>
               <option value="permissions">🛡️ Yetki Yönetimi & İhlaller</option>

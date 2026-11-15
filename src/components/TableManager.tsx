@@ -1,5 +1,6 @@
 import { Edit3, Plus, Save, Search, Trash2, LayoutGrid } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { isTableOccupied } from '../lib/format'
 import type { Table } from '../types'
 import { ManagementModalLayout } from './ManagementModalLayout'
 
@@ -90,7 +91,7 @@ export function TableManager({ isOpen, onClose, tables, onSave, onDelete }: Tabl
             </div>
           ) : (
             visibleTables.map((table) => {
-              const isOccupied = table.status === 'occupied' || table.cart.length > 0
+              const isOccupied = isTableOccupied(table)
               return (
                 <div
                   className={`manager-product ${editingId === table.id ? 'active' : ''}`}

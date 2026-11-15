@@ -18,4 +18,5 @@ export const DEFAULT_SETTINGS: AppSettings = {
   currentUserRole: 'admin',
   allowCashierRefund: true,
   allowCashierReopen: false,
+  allowWaiterCashMovement: false,
 }
